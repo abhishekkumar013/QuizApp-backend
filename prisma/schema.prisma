@@ -1,0 +1,109 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+
+model User {
+  id       String   @id @default(uuid())
+  name     String
+  email    String   @unique
+  password String
+  role     Role
+
+  studentProfile StudentProfile? @relation("StudentUser")
+  parentProfile  ParentProfile?  @relation("ParentUser")
+  children       StudentProfile[] @relation("ParentRelation")
+  quizzes        Quiz[]        @relation("TeacherQuizzes")
+  results        Result[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  parentId  String
+
+  user      User     @relation("StudentUser", fields: [userId], references: [id])
+  parent    User     @relation("ParentRelation", fields: [parentId], references: [id])
+
+  assignedQuizzes QuizAssignment[]
+}
+
+model ParentProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  user   User   @relation("ParentUser", fields: [userId], references: [id])
+}
+
+model Quiz {
+  id          String    @id @default(uuid())
+  title       String
+  createdBy   User      @relation("TeacherQuizzes", fields: [createdById], references: [id])
+  createdById String
+  accessType  AccessType
+  questions   Question[]
+  assignments QuizAssignment[]
+  results     Result[]
+  createdAt   DateTime  @default(now())
+}
+
+enum AccessType {
+  LINK
+  LIST
+}
+
+model Question {
+  id       String   @id @default(uuid())
+  quiz     Quiz     @relation(fields: [quizId], references: [id])
+  quizId   String
+  text     String
+  options  Option[]
+}
+
+model Option {
+  id         String   @id @default(uuid())
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId String
+  text       String
+  isCorrect  Boolean
+}
+
+model QuizAssignment {
+  id         String         @id @default(uuid())
+  quiz       Quiz           @relation(fields: [quizId], references: [id])
+  quizId     String
+  student    StudentProfile @relation(fields: [studentId], references: [id])
+  studentId  String
+  assignedAt DateTime       @default(now())
+}
+
+model Result {
+  id         String   @id @default(uuid())
+  student    User     @relation(fields: [studentId], references: [id])
+  studentId  String
+  quiz       Quiz     @relation(fields: [quizId], references: [id])
+  quizId     String
+  score      Int
+  submittedAt DateTime @default(now())
+}
