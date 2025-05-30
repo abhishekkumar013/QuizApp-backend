@@ -65,6 +65,10 @@ model Quiz {
   questions   Question[]
   assignments QuizAssignment[]
   results     Result[]
+
+  startTime   DateTime
+  endTime     DateTime
+
   createdAt   DateTime  @default(now())
 }
 
