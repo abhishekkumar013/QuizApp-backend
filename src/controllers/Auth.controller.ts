@@ -6,7 +6,7 @@ import { comparePassword, hashPassword } from "../Lib/hash.bcrypt";
 import { generateToken } from "../Lib/jwt";
 import { ApiResponse } from "../Lib/apiResponse";
 
-export const SignUpController = asyncHandler(
+export const SignUpController = asyncHandler( 
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { name, email, password, role } = req.body;
@@ -89,3 +89,118 @@ export const SignInController = asyncHandler(
     }
   }
 );
+
+export const SignOutController = asyncHandler(async(req:Request, res:Response, next:NextFunction)=>{
+  try {
+    res
+      .clearCookie("token")
+      .status(200)
+      .json(new ApiResponse(200, null, "Logout successfully"));
+  } catch (error) {
+    next(error);
+  }
+})
+
+export const GetUserController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try{
+    const users=await prisma.user.findMany({})
+
+    res.status(200).json(new ApiResponse(200, users, "Users fetched successfully"));
+  }catch(error){
+    next(error);
+  }
+})
+
+export const SearchUsersController=asyncHandler(async(req:Request,res:Response,next:NextFunction)=>{
+  try {
+     const searchParams = req.params.search;
+    
+    const users = await prisma.user.findMany({
+        where: {
+          OR: [
+            { name: { contains: searchParams, mode: "insensitive" } },
+            { email: { contains: searchParams, mode: "insensitive" } }
+          ]
+        }
+      });
+
+
+      if(!users){
+        throw new CustomError('No User found',404)
+      }
+
+      return res.status(200).json(ApiResponse(200,users,'users fetched successfully'))
+  } catch (error) {
+    next(error)
+  }
+})
+
+export const updateUserController=asyncHandler(async(req:Request,res:Response,next:NextFunction)=>{
+  try {
+    const id=req.params.id
+
+    const {name,role,email}=req.body
+
+    const user=await prisma.user.findFirst({
+      where:{
+        id:id
+      }
+    })
+    if(!user){
+      throw new CustomError('Invalid User Id || User not found',404)
+    }
+
+    const updateddata:any={}
+    if(name) updateddata.name=name
+    if (role) updateddata.role = role;
+    if (email) updateddata.email = email;
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: updateddata,
+    });
+     
+
+    const user={
+      name:updatedUser.name,
+      email:updatedUser.email,
+      role:updatedUser.role
+    }
+    return res.status(200).json(ApiResponse(200,user,'user updated successfully'))
+
+  } catch (error) {
+    next(error)
+  }
+})
+
+export const resetPasswordController=asyncHandler(async(req:Request,res:Response,next:NextFunction)=>{
+  try {
+    const id=req.params?.id
+
+    const {oldPassword,newPassword}=req.body
+
+    if(!oldPassword || !newPassword){
+      throw new CustomError('All fields are required',400)
+    }
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
+    if (!user) {
+      throw new CustomError("User not found", 404);
+    }
+    const isPasswordCorrect = await comparePassword(oldPassword, user.password);
+    if (!isPasswordCorrect) {
+      throw new CustomError("Invalid old password", 400);
+    }
+    const hashedNewPassword = await hashPassword(newPassword);
+    
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { password: hashedNewPassword },
+    });
+
+    return res.status(200).json(new ApiResponse(200, null, "Password reset successfully"));
+  } catch (error) {
+    next(error)
+  }
+})
