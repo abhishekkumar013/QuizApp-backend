@@ -103,7 +103,19 @@ export const SignOutController = asyncHandler(async(req:Request, res:Response, n
 
 export const GetUserController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   try{
-    const users=await prisma.user.findMany({})
+    const users=await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    })
 
     res.status(200).json(new ApiResponse(200, users, "Users fetched successfully"));
   }catch(error){
@@ -200,6 +212,279 @@ export const resetPasswordController=asyncHandler(async(req:Request,res:Response
     });
 
     return res.status(200).json(new ApiResponse(200, null, "Password reset successfully"));
+  } catch (error) {
+    next(error)
+  }
+})
+
+export const updateStudentParentController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const studentUserId = req.params.id; 
+    const { newParentId } = req.body; 
+
+    const studentProfile = await prisma.studentProfile.findUnique({
+      where: { userId: studentUserId }
+    });
+
+    if (!studentProfile) {
+      throw new CustomError("Student profile not found", 404);
+    }
+
+    const parentUser = await prisma.user.findUnique({
+      where: { id: newParentId }
+    });
+
+    if (!parentUser || parentUser.role !== "PARENT") {
+      throw new CustomError("Invalid parent user ID", 400);
+    }
+
+    const updatedProfile = await prisma.studentProfile.update({
+      where: { userId: studentUserId },
+      data: { parentId: newParentId }
+    });
+
+    res.status(200).json(new ApiResponse(200, updatedProfile, "Parent updated successfully"));
+  } catch (error) {
+    next(error);
+  }
+});
+
+export const addChildToParentController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parentUserId = req.params.parentId; // Parent's user ID
+    const { childUserId } = req.body; // Student's user ID
+
+    const parentUser = await prisma.user.findUnique({
+      where: { id: parentUserId }
+    });
+
+    if (!parentUser || parentUser.role !== "PARENT") {
+      throw new CustomError("Invalid parent ID", 400);
+    }
+
+    const studentProfile = await prisma.studentProfile.findUnique({
+      where: { userId: childUserId }
+    });
+
+    if (!studentProfile) {
+      throw new CustomError("Student profile not found", 404);
+    }
+
+    const updatedStudentProfile = await prisma.studentProfile.update({
+      where: { userId: childUserId },
+      data: { parentId: parentUserId }
+    });
+
+    res.status(200).json(new ApiResponse(200, updatedStudentProfile, "Child added to parent successfully"));
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+export const getAllStudentController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const students = await prisma.studentProfile.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        parent: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!students || students.length === 0) {
+      throw new CustomError("No students found", 404);
+    }
+
+    res.status(200).json(new ApiResponse(200, students, "Students fetched successfully"));
+  } catch (error) {
+    next(error);
+  }
+});
+
+const getAllParentsController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parents=await  prisma.parentProfile.findMany({
+      include:{
+        user:{
+          select:{
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            updatedAt: true,
+          }
+        }
+      }
+    })
+
+    if(!parents || parents.length === 0) {
+      throw new CustomError("No parents found", 404);
+    }
+    res.status(200).json(new ApiResponse(200, parents, "Parents fetched successfully"));
+  } catch (error) {
+    next(error);
+  }
+})
+
+export const getAllTeachersController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const teachers=await prisma.user.findMany({
+      where: {
+        role: "TEACHER"
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    })
+    if (!teachers || teachers.length === 0) {
+      throw new CustomError("No teachers found", 404);
+    }
+    res.status(200).json(new ApiResponse(200, teachers, "Teachers fetched successfully"));
+  } catch (error) {
+    next(error)
+  }
+})
+
+export const searchStudentController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const searchTerm = req.params.name || req.query.name as string;
+
+    if (!searchTerm) {
+      throw new CustomError("Search term is required", 400);
+    }
+
+    const students = await prisma.studentProfile.findMany({
+      where: {
+        user: {
+          name: {
+            contains: searchTerm,
+            mode: "insensitive", 
+          },
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        parent: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!students || students.length === 0) {
+      throw new CustomError("No students found", 404);
+    }
+
+    res.status(200).json(new ApiResponse(200, students, "Students fetched successfully"));
+  } catch (error) {
+    next(error);
+  }
+});
+export const searchParentController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const searchTerm = req.params.name || req.query.name as string;
+
+    if (!searchTerm) {
+      throw new CustomError("Search term is required", 400);
+    }
+
+    const parents = await prisma.parentProfile.findMany({
+      where: {
+        user: {
+          name: {
+            contains: searchTerm,
+            mode: "insensitive", 
+          },
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!parents || parents.length === 0) {
+      throw new CustomError("No parents found", 404);
+    }
+
+    res.status(200).json(new ApiResponse(200, parents, "Parents fetched successfully"));
+  } catch (error) {
+    next(error);
+  }
+});
+
+export const searchTeacherController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const searchTerm = req.params.name || req.query.name as string;
+    if (!searchTerm) {
+      throw new CustomError("Search term is required", 400);
+    }
+
+    const teachers=await prisma.user.findMany({
+      where:{
+        role: "TEACHER",
+        name: {
+          contains: searchTerm,
+          mode: "insensitive", 
+        },
+      },
+      select:{
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    })
+    if (!teachers || teachers.length === 0) {
+      throw new CustomError("No teachers found", 404);
+    }
+
+    res.status(200).json(new ApiResponse(200, teachers, "Teachers fetched successfully"));
+    
   } catch (error) {
     next(error)
   }
