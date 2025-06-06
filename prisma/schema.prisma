@@ -21,6 +21,8 @@ enum Role {
 }
 
 
+
+
 model User {
   id       String   @id @default(uuid())
   name     String
@@ -56,12 +58,20 @@ model ParentProfile {
   user   User   @relation("ParentUser", fields: [userId], references: [id])
 }
 
+model Category {
+  id      String @id @default(uuid())
+  name    String @unique
+
+  quizzes Quiz[]
+}
+
 model Quiz {
   id          String    @id @default(uuid())
   title       String
   createdBy   User      @relation("TeacherQuizzes", fields: [createdById], references: [id])
   createdById String
-  accessType  AccessType
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
   questions   Question[]
   assignments QuizAssignment[]
   results     Result[]
@@ -72,10 +82,6 @@ model Quiz {
   createdAt   DateTime  @default(now())
 }
 
-enum AccessType {
-  LINK
-  LIST
-}
 
 model Question {
   id       String   @id @default(uuid())
