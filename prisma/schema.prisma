@@ -20,6 +20,12 @@ enum Role {
   PARENT
 }
 
+enum  AccessType {
+  PUBLIC
+  PRIVATE
+  PROTECTED
+}
+
 
 
 
@@ -72,6 +78,8 @@ model Quiz {
   createdById String
   categoryId  String
   category    Category  @relation(fields: [categoryId], references: [id])
+  accessType AccessType @default(PUBLIC)
+  durationInMinutes Int
   questions   Question[]
   assignments QuizAssignment[]
   results     Result[]

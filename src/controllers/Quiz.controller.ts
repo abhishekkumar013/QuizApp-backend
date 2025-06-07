@@ -8,9 +8,9 @@ import { json } from "stream/consumers";
 export const createQuizController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { title, createdById, startTime,categoryId, endTime } = req.body;
+      const { title, createdById, startTime,categoryId,accessType,duration, endTime } = req.body;
 
-      if (!title || !createdById || !accessType || !startTime || !endTime || !categoryId) {
+      if (!title || !createdById || !accessType || !startTime || !endTime || !categoryId || !duration) {
         throw new CustomError("All fields are required", 400);
       }
 
@@ -27,7 +27,9 @@ export const createQuizController = asyncHandler(
         data: {
           title,
           createdById,
+          accessType,
           categoryId,
+          durationInMinutes:duration,
           startTime: new Date(startTime),
           endTime: new Date(endTime),
         },
@@ -44,6 +46,20 @@ export const addQuestionsToQuiz = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { quizId, questions } = req.body;
+
+      const userId = req.user?.id; // Assuming user ID is stored in req.user
+      if (!userId) {
+        throw new CustomError("User not authenticated", 401);
+      }
+      const isUserCreateQuiz=await prisma.quiz.findFirst({
+        where: {
+          id: quizId,
+          createdById: userId,
+        },
+      })
+      if (!isUserCreateQuiz) {
+        throw new CustomError("You are not authorized to add questions to this quiz", 403);
+      }
 
       if (!quizId || !questions || !Array.isArray(questions)) {
         throw new CustomError("quizId and questions are required", 400);
@@ -84,28 +100,85 @@ export const addQuestionsToQuiz = asyncHandler(
 
 // this controller is used to get all the quiz and show on front where use select which quiz he need to attempt
 export const getAllQuizController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const AllQuiz=await prisma.quiz.findMany({
-            include: {
-                createdBy: {
-                    select: {
-                        id: true,
-                        name: true,
-                        email: true
-                    }
-                },
-                category: {
-                    select: {
-                        id: true,
-                        name: true
-                    }
-                },
-            }
-        })
-    } catch (error) {
-        next(error);
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      throw new CustomError("Unauthorized", 401);
     }
-})
+
+    // Find the studentProfileId from userId
+    const studentProfile = await prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!studentProfile) {
+      throw new CustomError("Student profile not found", 404);
+    }
+
+    const studentProfileId = studentProfile.id;
+
+    // Fetch all public quizzes
+    const publicQuizzes = await prisma.quiz.findMany({
+      where: {
+        accessType: "PUBLIC",
+        endTime: { lte: new Date() },
+      },
+      select: {
+        id: true,
+        title: true,
+        durationInMinutes: true,
+        startTime: true,
+        endTime: true,
+        category: {
+          select: { id: true, name: true }
+        },
+        createdBy: {
+          select: { id: true, name: true, email: true }
+        },
+      },
+    });
+
+    // Fetch assigned quizzes to the student
+    const assignedQuizzes = await prisma.quizAssignment.findMany({
+      where: {
+        studentId: studentProfileId,
+        quiz: {
+          endTime: { lte: new Date() },
+        }
+      },
+      select: {
+        quiz: {
+          select: {
+            id: true,
+            title: true,
+            durationInMinutes: true,
+            startTime: true,
+            endTime: true,
+            category: {
+              select: { id: true, name: true }
+            },
+            createdBy: {
+              select: { id: true, name: true, email: true }
+            },
+          }
+        }
+      }
+    });
+
+    const assignedQuizList = assignedQuizzes.map(q => q.quiz);
+
+    return res.status(200).json(
+      new ApiResponse(200, {
+        publicQuizzes,
+        assignedQuizzes: assignedQuizList
+      }, "Quizzes fetched successfully")
+    );
+  } catch (error) {
+    next(error);
+  }
+});
 
 export const getQuizByIdController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -117,7 +190,12 @@ export const getQuizByIdController = asyncHandler(
 
        const quiz = await prisma.quiz.findUnique({
         where: { id },
-        include: {
+        select: {
+          id: true,
+          title: true,
+          durationInMinutes: true,
+          startTime: true,
+          endTime: true,
           createdBy: {
             select: {
               id: true,
@@ -141,6 +219,17 @@ export const getQuizByIdController = asyncHandler(
 
       if (!quiz) {
         throw new CustomError("Quiz not found", 404);
+      }
+
+
+      const isAssigned=await prisma.quizAssignment.findFirst({
+        where: {
+          quizId: id,
+          studentId: req.user?.id, // Assuming user ID is stored in req.user
+        },
+      })
+      if(!isAssigned && quiz.accessType !== "PUBLIC") {
+        throw new CustomError("You are not authorized to view this quiz", 403);
       }
 
       return res.status(200).json(new ApiResponse(200, quiz, "Quiz fetched successfully"));
@@ -169,9 +258,15 @@ export const getQuizByCategoryController=asyncHandler(async (req: Request, res: 
 
         const quizess=await prisma.quiz.findMany({
             where:{
-                categoryId: categoryId
+                categoryId: categoryId,
+                accessType: "PUBLIC",
             },
-            include:{
+            select:{
+                id: true,
+                title: true,
+                durationInMinutes: true,
+                startTime: true,
+                endTime: true,
                 createdBy: {
                     select: {
                         id: true,
@@ -186,6 +281,29 @@ export const getQuizByCategoryController=asyncHandler(async (req: Request, res: 
                     }
                 },
             }
+        })
+
+        const assignedQuiz=await prisma.quizAssignment.findMany({
+          where:{
+            studentId:req.user?.id
+          },
+          select:{
+            quiz: {
+              select: {
+                id: true,
+                title: true,
+                durationInMinutes: true,
+                startTime: true,
+                endTime: true,
+                category: {
+                  select: { id: true, name: true }
+                },
+                createdBy: {
+                  select: { id: true, name: true, email: true }
+                },
+              }
+            }
+          }
         })
 
         if (!quizess || quizess.length === 0) {
