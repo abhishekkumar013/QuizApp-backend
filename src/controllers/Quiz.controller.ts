@@ -316,3 +316,66 @@ export const getQuizByCategoryController=asyncHandler(async (req: Request, res: 
         next(error)
     }
   })
+
+
+export const deleteQuizController = asyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id=req.params.id
+    if (!id) {
+      throw new CustomError("Quiz ID is required", 400);
+    }
+
+    const userId=req.user?.id; 
+
+    const isUserCreateQuiz = await prisma.quiz.findFirst({
+      where:{
+        createdBy:userId
+      }
+    })
+    if (!isUserCreateQuiz) {
+      throw new CustomError("You are not authorized to delete this quiz", 403);
+    }
+
+    const allquestions=await prisma.question.findMany({
+      where:{
+        quizId:id
+      }
+    })
+
+    const questionid=allquestions.map((q)=>q.id)
+
+    await prisma.option.deleteMany({
+      where:{
+        questionId:{
+          in: questionid
+        }
+      }
+    })
+
+    await prisma.question.deleteMany({
+      where:{
+        quizId:id
+      }
+    })
+    await prisma.quiz.delete({
+      where: {
+        id: id,
+      },
+    })
+
+    return res.status(200).json(new ApiResponse(200, null, "Quiz deleted successfully"));
+
+  } catch (error) {
+    next(error);
+  }
+})
+
+
+export const submitQUizController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+
+})
+
+// send which question is correct and which is wrong
+export const getQuizReportController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+
+})

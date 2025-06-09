@@ -23,7 +23,7 @@ export const createCategoryController = asyncHandler(
         data: { name:categoryName },
       });
 
-      return res.status(200).json({new ApiResponse(200, newcategory, "New Category Created")});
+      return res.status(200).json(new ApiResponse(200, newcategory, "New Category Created"));
     } catch (error) {
       next(error);
     }
@@ -61,7 +61,7 @@ export const deleteCategoryController=asyncHandler(async(req:Request,res:Respons
         await prisma.category.delete({
             where: { id },
         });
-        return res.status(200).json({new ApiResponse(200, null, "Category deleted successfully")});
+        return res.status(200).json(new ApiResponse(200, null, "Category deleted successfully"));
     } catch (error) {
         next(error);
     }
@@ -90,7 +90,7 @@ const updateCategoryCotroller=asyncHandler(async(req:Request,res:Response,next:N
             where: { id },
             data: { name: categoryName },
         });
-        return res.status(200).json({new ApiResponse(200, updatedCategory, "Category updated successfully")});
+        return res.status(200).json(new ApiResponse(200, updatedCategory, "Category updated successfully"));
     } catch (error) {
         next(error)
     }
