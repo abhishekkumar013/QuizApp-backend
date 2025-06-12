@@ -372,10 +372,199 @@ export const deleteQuizController = asyncHandler(async(req: Request, res: Respon
 
 
 export const submitQUizController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { quizId, timeTaken, answers } = req.body;
+    const studentId = req.user.id;
 
+    if (!quizId || !timeTaken || !Array.isArray(answers) || answers.length === 0) {
+      throw new CustomError("Quiz ID, time taken, and answers are required", 400);
+    } 
+
+    // Fetch quiz with questions and options
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: {
+        questions: {
+          include: {
+            options: true,
+          },
+        },
+      },
+    });
+
+    if (!quiz) {
+      return res.status(404).json({ error: "Quiz not found" });
+    }
+
+    let totalScore = 0;
+    let score = 0;
+    let questionsCorrect = 0;
+    let questionsIncorrect = 0;
+    let questionsAttempted = 0;
+
+    const evaluation = [];
+
+    for (const question of quiz.questions) {
+      totalScore += question.score;
+      const userAnswer = answers.find(a => a.questionId === question.id);
+      const correctOption = question.options.find(opt => opt.isCorrect);
+
+      if (!userAnswer || !correctOption) continue;
+
+      const selectedOption = question.options.find(o => o.id === userAnswer.selectedOptionId);
+      const isCorrect = userAnswer.selectedOptionId === correctOption.id;
+
+      if (selectedOption) questionsAttempted++;
+      if (isCorrect) {
+        score += question.score;
+        questionsCorrect++;
+      } else {
+        questionsIncorrect++;
+      }
+
+      evaluation.push({
+        questionId: question.id,
+        questionText: question.text,
+        selectedOptionId: userAnswer.selectedOptionId,
+        selectedOptionText: selectedOption?.text || null,
+        correctOptionId: correctOption.id,
+        correctOptionText: correctOption.text,
+        isCorrect,
+      });
+    }
+
+    // Store result
+    await prisma.result.create({
+      data: {
+        studentId,
+        quizId,
+        score,
+        totalScore,
+        questionsAttempted,
+        questionsCorrect,
+        questionsIncorrect,
+        timeTaken,
+      },
+    });
+
+    res.status(200).json(new ApiResponse(200,data:{
+      score,
+      totalScore,
+      questionsAttempted,
+      questionsCorrect,
+      questionsIncorrect,
+      timeTaken,
+      evaluation
+    },"Quiz submitted successfully"));
+  } catch (error) {
+    next(error);
+  }
 })
 
 // send which question is correct and which is wrong
 export const getQuizReportController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
 
+})
+
+export const getAllAttempetedQuiz = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req?.user.id;
+
+       const attemptedQuizzes = await prisma.result.findMany({
+        where: {
+          studentId: userId,
+        },
+        include:{
+            quiz:{
+                select:{
+                    id: true,
+                    title: true,
+                    description: true,
+                    createdBy: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                }
+            }
+        }
+      });
+
+      if (!attemptedQuizzes || attemptedQuizzes.length === 0) {
+        throw CustomError("No attempted quizzes found for this user", 400);
+      }
+      return res.status(200).json(new ApiResponse(200,attemptedQuizzes"Attempted quizzes fetched successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+//  for admin or teacher
+export const getStudentsWhoAttemptedQuizController = asyncHandler(async(req:Request, res:Response, next:NextFunction) => {
+    try {
+        const quizId = req.params.id;
+
+        const userId= req?.user.id;
+
+        const user=await prisma.user.findUnique({
+            where: {
+                id: userId,
+            },
+            select: {
+                role: true,
+            },
+        });
+        if (user?.role !== "ADMIN" && user?.role !== "TEACHER") {
+            throw CustomError("You are not authorized to view this data", 403);
+        }
+
+        const isQUiz=await prisma.quiz.findUnique({
+            where: {
+                id: quizId,
+            },
+        })
+        if (!isQUiz) {
+            throw CustomError("Quiz not found", 404);
+        }
+
+        const studentList=await prisma.result.findMany({
+            where:{
+                quizId: quizId,
+            },
+            select:{
+                student: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                    },
+                },
+                // quiz:{
+                //     select: {
+                //         id: true,
+                //         title: true,
+                //         createdBy:{
+                //             select:{
+                //                 id: true,
+                //                 name: true,
+                //                 email: true,
+                //             }
+                //         }
+                //     }
+                // },
+                score: true,
+                createdAt: true,
+            }
+        })
+        if (!studentList || studentList.length === 0) {
+            throw CustomError("No students have attempted this quiz", 404);
+        }
+        return res.status(200).json(new ApiResponse(200,studentList,"Students who attempted the quiz fetched successfully"));
+    } catch (error) {
+        next(error);
+    }
 })

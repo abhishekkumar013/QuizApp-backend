@@ -4,106 +4,126 @@ import prisma from "../Lib/prisma";
 import { CustomError } from "../Lib/error.handler";
 import { ApiResponse } from "../Lib/apiResponse";
 
-export const getAllAttempetedQuiz = asyncHandler(
+export const getAllResultController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = req?.user.id;
-
-       const attemptedQuizzes = await prisma.result.findMany({
-        where: {
-          studentId: userId,
-        },
-        include:{
-            quiz:{
-                select:{
-                    id: true,
-                    title: true,
-                    description: true,
-                    createdBy: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                        },
-                    },
-                }
-            }
-        }
-      });
-
-      if (!attemptedQuizzes || attemptedQuizzes.length === 0) {
-        throw CustomError("No attempted quizzes found for this user", 400);
+      const studentId = req.user?.id;
+      if (!studentId) {
+        throw new CustomError("Unauthorized", 401);
       }
-      return res.status(200).json(new ApiResponse(200,attemptedQuizzes"Attempted quizzes fetched successfully"));
+
+      const results = await prisma.result.findMany({
+        where: {
+          studentId: studentId,
+        },
+        include: {
+          quiz: {
+            select: {
+              id: true,
+              title: true,
+              durationInMinutes: true,
+            },
+          },
+        },
+      });
+      if (!results || results.length === 0) {
+        throw new CustomError("No results found", 404);
+      }
+      res
+        .status(200)
+        .json(new ApiResponse(200, results, "Results retrieved successfully"));
     } catch (error) {
       next(error);
     }
   }
 );
 
-//  for admin or teacher
-export const getStudentsWhoAttemptedQuizController = asyncHandler(async(req:Request, res:Response, next:NextFunction) => {
+export const getResultByIdController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const quizId = req.params.id;
+      const studentId = req.user?.id;
+      const id = req.params.id;
 
-        const userId= req?.user.id;
+      if (!studentId) {
+        throw new CustomError("Unauthorized", 401);
+      }
+      if (!id) {
+        throw new CustomError("Result ID is required", 400);
+      }
 
-        const user=await prisma.user.findUnique({
-            where: {
-                id: userId,
-            },
+      const result = await prisma.result.findUnique({
+        where: {
+          quizId: id,
+          studentId: studentId,
+        },
+        include: {
+          quiz: {
             select: {
-                role: true,
-            },
-        });
-        if (user?.role !== "ADMIN" && user?.role !== "TEACHER") {
-            throw CustomError("You are not authorized to view this data", 403);
-        }
-
-        const isQUiz=await prisma.quiz.findUnique({
-            where: {
-                id: quizId,
-            },
-        })
-        if (!isQUiz) {
-            throw CustomError("Quiz not found", 404);
-        }
-
-        const studentList=await prisma.result.findMany({
-            where:{
-                quizId: quizId,
-            },
-            select:{
-                student: {
-                    select: {
-                        id: true,
-                        name: true,
-                        email: true,
-                    },
+              id: true,
+              title: true,
+              durationInMinutes: true,
+              createdBy: {
+                select: {
+                  id: true,
+                  name: true,
                 },
-                // quiz:{
-                //     select: {
-                //         id: true,
-                //         title: true,
-                //         createdBy:{
-                //             select:{
-                //                 id: true,
-                //                 name: true,
-                //                 email: true,
-                //             }
-                //         }
-                //     }
-                // },
-                score: true,
-                createdAt: true,
-            }
-        })
-        if (!studentList || studentList.length === 0) {
-            throw CustomError("No students have attempted this quiz", 404);
-        }
-        return res.status(200).json(new ApiResponse(200,studentList,"Students who attempted the quiz fetched successfully"));
-    } catch (error) {
-        next(error);
-    }
-})
+              },
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
 
+      if (!result) {
+        throw new CustomError("Result not found", 404);
+      }
+      res
+        .status(200)
+        .json(new ApiResponse(200, result, "Result retrieved successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+export const quizRankController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const quizId = req.params.id;
+      if (!quizId) {
+        throw new CustomError("Quiz ID is required", 400);
+      }
+      const results = await prisma.result.findMany({
+        where: {
+          quizId: quizId,
+        },
+        orderBy: {
+          score: "desc",
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+      if (!results || results.length === 0) {
+        throw new CustomError("No results found for this quiz", 404);
+      }
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(200, results, "Quiz ranks retrieved successfully")
+        );
+    } catch (error) {
+      next(error);
+    }
+  }
+);

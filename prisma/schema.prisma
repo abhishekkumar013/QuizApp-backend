@@ -97,6 +97,7 @@ model Question {
   quiz     Quiz     @relation(fields: [quizId], references: [id])
   quizId   String
   text     String
+  score    Int
   options  Option[]
 }
 
@@ -124,5 +125,10 @@ model Result {
   quiz       Quiz     @relation(fields: [quizId], references: [id])
   quizId     String
   score      Int
+  totalScore Int
+  questionsAttempted Int
+  questionsCorrect Int
+  questionsIncorrect Int
+  timeTaken  Int 
   submittedAt DateTime @default(now())
 }
