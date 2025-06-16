@@ -26,6 +26,23 @@ enum  AccessType {
   PROTECTED
 }
 
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ResultStatus {
+  IN_PROGRESS
+  COMPLETED
+  SUBMITTED
+}
+
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+}
 
 
 
@@ -38,12 +55,16 @@ model User {
 
   studentProfile StudentProfile? @relation("StudentUser")
   parentProfile  ParentProfile?  @relation("ParentUser")
+  teacherProfile TeacherProfile? @relation("TeacherUser")
+
   children       StudentProfile[] @relation("ParentRelation")
   quizzes        Quiz[]        @relation("TeacherQuizzes")
   results        Result[]
+  sessions       QuizSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@unique([role,email])
 }
 
@@ -52,17 +73,31 @@ model StudentProfile {
   userId    String   @unique
   parentId  String
 
-  user      User     @relation("StudentUser", fields: [userId], references: [id])
-  parent    User     @relation("ParentRelation", fields: [parentId], references: [id])
+  user       User     @relation("StudentUser", fields: [userId], references: [id], onDelete: Cascade)
+  parent     User?    @relation("ParentRelation", fields: [parentId], references: [id])
 
   assignedQuizzes QuizAssignment[]
+  quizSessions   QuizSession[]
 }
 
 model ParentProfile {
   id     String @id @default(uuid())
   userId String @unique
+  phone  String?
 
-  user   User   @relation("ParentUser", fields: [userId], references: [id])
+  user   User   @relation("ParentUser", fields: [userId], references: [id],onDelete: Cascade)
+}
+
+model TeacherProfile {
+  id              String @id @default(uuid())
+  userId          String @unique
+  phone           String?
+  experienceYears Int?
+
+  
+  user        User   @relation("TeacherUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  assignedQuizzes QuizAssignment[]
 }
 
 model Category {
@@ -75,38 +110,64 @@ model Category {
 model Quiz {
   id          String    @id @default(uuid())
   title       String
+  description String?
+  instructions String?
   createdBy   User      @relation("TeacherQuizzes", fields: [createdById], references: [id])
   createdById String
   categoryId  String
   category    Category  @relation(fields: [categoryId], references: [id])
   accessType AccessType @default(PUBLIC)
+  status     QuizStatus @default(DRAFT)
+  difficulty DifficultyLevel @default(EASY)
+
   durationInMinutes Int
+  totalMarks       Int     @default(0)
+  passingMarks     Int     @default(0)
+  maxAttempts      Int     @default(1)
+  shuffleQuestions Boolean @default(false)
+  showResults      Boolean @default(true)
+
   questions   Question[]
   assignments QuizAssignment[]
   results     Result[]
+  sessions    QuizSession[]
+  
 
-  startTime   DateTime
-  endTime     DateTime
+  startTime   DateTime?
+  endTime     DateTime?
 
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 
 model Question {
   id       String   @id @default(uuid())
-  quiz     Quiz     @relation(fields: [quizId], references: [id])
+  quiz     Quiz     @relation(fields: [quizId], references: [id],onDelete: Cascade)
   quizId   String
   text     String
   score    Int
+  explanation String?
+  marks      Int     @default(1)
+  order      Int
+  isRequired Boolean @default(true)
+
   options  Option[]
+  answer   Answer[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Option {
   id         String   @id @default(uuid())
-  question   Question @relation(fields: [questionId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id],onDelete: Cascade)
   questionId String
   text       String
   isCorrect  Boolean
+  order      Int
+
+  answers   Answer[] 
 }
 
 model QuizAssignment {
@@ -115,20 +176,67 @@ model QuizAssignment {
   quizId     String
   student    StudentProfile @relation(fields: [studentId], references: [id])
   studentId  String
+  assignedBy String
+  teacher    TeacherProfile @relation(fields: [assignedBy], references: [id])
   assignedAt DateTime       @default(now())
 }
 
+model QuizSession {
+  id          String       @id @default(uuid())
+  quiz        Quiz         @relation(fields: [quizId], references: [id])
+  quizId      String
+  student     User         @relation(fields: [studentId], references: [id])
+  studentId   String
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+  studentProfileId String
+  
+  status      ResultStatus @default(IN_PROGRESS)
+  startedAt   DateTime     @default(now())
+  submittedAt DateTime?
+  timeSpent   Int         @default(0)
+  
+  answers     Answer[]
+}
+
+model Answer{
+   id          String      @id @default(uuid())
+  session     QuizSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId   String
+  question    Question    @relation(fields: [questionId], references: [id])
+  questionId  String
+  option      Option?     @relation(fields: [optionId], references: [id])
+  optionId    String?
+  textAnswer  String?
+  isCorrect   Boolean?
+  marksAwarded Int        @default(0)
+  
+  answeredAt  DateTime    @default(now())
+  
+  @@unique([sessionId, questionId])
+}
+
+
 model Result {
-  id         String   @id @default(uuid())
-  student    User     @relation(fields: [studentId], references: [id])
-  studentId  String
-  quiz       Quiz     @relation(fields: [quizId], references: [id])
-  quizId     String
-  score      Int
-  totalScore Int
-  questionsAttempted Int
-  questionsCorrect Int
-  questionsIncorrect Int
-  timeTaken  Int 
-  submittedAt DateTime @default(now())
+  id                  String   @id @default(uuid())
+  student             User     @relation(fields: [studentId], references: [id])
+  studentId           String
+  quiz                Quiz     @relation(fields: [quizId], references: [id])
+  quizId              String
+  sessionId           String?
+  
+  score               Int
+  totalMarks          Int
+  percentage          Float
+  questionsAttempted  Int
+  questionsCorrect    Int
+  questionsIncorrect  Int
+  questionsSkipped    Int      @default(0)
+  timeTaken           Int
+  
+  isPassed            Boolean  @default(false)
+  attemptNumber       Int      @default(1)
+  
+  submittedAt         DateTime @default(now())
+  
+  @@unique([quizId, studentId, attemptNumber])
 }
