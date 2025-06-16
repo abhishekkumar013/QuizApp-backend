@@ -108,6 +108,56 @@ export const SignOutController = asyncHandler(
   }
 );
 
+export const switchUserRoleController=asyncHandler(async(req:Request,res:Response,next:NextFunction)=>{
+  try {
+    const { email, targetRole } = req.body;
+    
+    if(!email || !targetRole) {
+      throw new CustomError("Email and target role are required", 400);
+    }
+    const user=await prisma.user.findUnique({
+      where:{
+        role_email:{
+          role:targetRole,
+          email:email
+        },
+      },
+      include:{
+        studentProfile: true,
+        parentProfile: true,
+        teacherProfile: true,
+      }
+    })
+
+    if(!user) {
+      throw new CustomError("User not found with the specified role", 404);
+    }
+
+    const token=await generateToken({
+      id: user.id,
+      role:user.role,
+      email:user.email
+    })
+
+    res.cookie("token", token, {
+        httpOnly: true,
+      })
+      .status(200).json(new ApiResponse(200,{
+        id:user.id,
+        name:user.name,
+        email: user.email,
+        role: user.role,
+        profile: user.role==="STUDENT"? user.studentProfile :
+          user.role==="PARENT"? user.parentProfile :   
+          user.role==="TEACHER"? user.teacherProfile : null
+        },
+        "User role switched successfully"
+      ))
+  } catch (error) {
+    next(error)
+  }
+})
+
 export const GetUserController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
