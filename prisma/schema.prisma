@@ -71,7 +71,7 @@ model User {
 model StudentProfile {
   id        String   @id @default(uuid())
   userId    String   @unique
-  parentId  String
+  parentId  String?
 
   user       User     @relation("StudentUser", fields: [userId], references: [id], onDelete: Cascade)
   parent     User?    @relation("ParentRelation", fields: [parentId], references: [id])
@@ -92,7 +92,7 @@ model TeacherProfile {
   id              String @id @default(uuid())
   userId          String @unique
   phone           String?
-  experienceYears Int?
+  experienceYears Int?   @default(0)
 
   
   user        User   @relation("TeacherUser", fields: [userId], references: [id], onDelete: Cascade)

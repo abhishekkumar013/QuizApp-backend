@@ -5,19 +5,26 @@ import prisma from "../Lib/prisma";
 import { comparePassword, hashPassword } from "../Lib/hash.bcrypt";
 import { generateToken } from "../Lib/jwt";
 import { ApiResponse } from "../Lib/apiResponse";
+import { isValidRole, Role } from "../utils";
 
 export const SignUpController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { name, email, password, role } = req.body;
+      const { name, email, password, role, parentEmail } = req.body;
 
       if (!name || !email || !password || !role) {
         throw new CustomError("All fields required", 400);
       }
+      if (!isValidRole(role)) {
+        throw new CustomError("Invalid Role", 400);
+      }
 
       const isUser = await prisma.user.findUnique({
         where: {
-          email: email,
+          role_email: {
+            role,
+            email,
+          },
         },
       });
 
@@ -26,18 +33,69 @@ export const SignUpController = asyncHandler(
       }
 
       const bcryptPassword = await hashPassword(password);
-      const user = await prisma.user.create({
-        data: {
-          name: name,
-          email,
-          password: bcryptPassword,
-          role,
-        },
+      const result = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            name: name,
+            email,
+            password: bcryptPassword,
+            role,
+          },
+        });
+
+        switch (role) {
+          case "STUDENT":
+            let parentId = null;
+            if (parentEmail) {
+              const parent = await tx.user.findUnique({
+                where: {
+                  role_email: {
+                    role: "PARENT",
+                    email: parentEmail,
+                  },
+                },
+              });
+              parentId = parent?.id || null;
+            }
+            await tx.studentProfile.create({
+              data: {
+                userId: user.id,
+                parentId,
+              },
+            });
+            break;
+          case "TEACHER":
+            const { phone, experienceYears } = req.body;
+            await tx.teacherProfile.create({
+              data: {
+                userId: user.id,
+                phone: phone || null,
+                experienceYears: experienceYears || 0,
+              },
+            });
+            break;
+          case "PARENT":
+            const { phone } = req.body;
+            await tx.parentProfile.create({
+              data: {
+                userId: user.id,
+                phone: phone || null,
+              },
+            });
+            break;
+          case "ADMIN":
+            break;
+          default:
+            throw new CustomError("Invalid Role", 400);
+        }
+        return user;
       });
 
       return res
         .status(200)
-        .json(new ApiResponse(200, user, "Account Created successfully"));
+        .json(
+          new ApiResponse(200, { user: result }, "Account Created successfully")
+        );
     } catch (error) {
       next(error);
     }
@@ -47,15 +105,18 @@ export const SignUpController = asyncHandler(
 export const SignInController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, role } = req.body;
 
-      if (!email || !password) {
+      if (!email || !password || !role) {
         throw new CustomError("All fields required", 400);
       }
 
       const isUser = await prisma.user.findUnique({
         where: {
-          email: email,
+          role_email: {
+            role,
+            email,
+          },
         },
       });
       if (!isUser) {
@@ -69,7 +130,11 @@ export const SignInController = asyncHandler(
         throw new CustomError("Invalid credentails", 400);
       }
 
-      const token = await generateToken({ id: isUser.id });
+      const token = await generateToken({
+        id: isUser.id,
+        role: isUser.role,
+        email: isUser.email,
+      });
       res
         .cookie("token", token, {
           httpOnly: true,
@@ -108,55 +173,136 @@ export const SignOutController = asyncHandler(
   }
 );
 
-export const switchUserRoleController=asyncHandler(async(req:Request,res:Response,next:NextFunction)=>{
-  try {
-    const { email, targetRole } = req.body;
-    
-    if(!email || !targetRole) {
-      throw new CustomError("Email and target role are required", 400);
-    }
-    const user=await prisma.user.findUnique({
-      where:{
-        role_email:{
-          role:targetRole,
-          email:email
-        },
-      },
-      include:{
-        studentProfile: true,
-        parentProfile: true,
-        teacherProfile: true,
+export const LinkParentStudentController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { studentEmail, parentEmail } = req.body;
+
+      if (!studentEmail || !parentEmail) {
+        throw new CustomError(
+          "Both student and parent emails are required",
+          400
+        );
       }
-    })
 
-    if(!user) {
-      throw new CustomError("User not found with the specified role", 404);
-    }
-
-    const token=await generateToken({
-      id: user.id,
-      role:user.role,
-      email:user.email
-    })
-
-    res.cookie("token", token, {
-        httpOnly: true,
-      })
-      .status(200).json(new ApiResponse(200,{
-        id:user.id,
-        name:user.name,
-        email: user.email,
-        role: user.role,
-        profile: user.role==="STUDENT"? user.studentProfile :
-          user.role==="PARENT"? user.parentProfile :   
-          user.role==="TEACHER"? user.teacherProfile : null
+      // Find student
+      const student = await prisma.user.findUnique({
+        where: {
+          role_email: {
+            role: "STUDENT",
+            email: studentEmail,
+          },
         },
-        "User role switched successfully"
-      ))
-  } catch (error) {
-    next(error)
+        include: {
+          studentProfile: true,
+        },
+      });
+
+      if (!student || !student.studentProfile) {
+        throw new CustomError("Student not found", 404);
+      }
+
+      // Find parent
+      const parent = await prisma.user.findUnique({
+        where: {
+          role_email: {
+            role: "PARENT",
+            email: parentEmail,
+          },
+        },
+      });
+
+      if (!parent) {
+        throw new CustomError("Parent not found", 404);
+      }
+
+      // Update student profile with parent ID
+      const updatedProfile = await prisma.studentProfile.update({
+        where: {
+          id: student.studentProfile.id,
+        },
+        data: {
+          parentId: parent.id,
+        },
+      });
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            updatedProfile,
+            "Parent-student link created successfully"
+          )
+        );
+    } catch (error) {
+      next(error);
+    }
   }
-})
+);
+
+export const switchUserRoleController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { email, targetRole } = req.body;
+
+      if (!email || !targetRole) {
+        throw new CustomError("Email and target role are required", 400);
+      }
+      const user = await prisma.user.findUnique({
+        where: {
+          role_email: {
+            role: targetRole,
+            email: email,
+          },
+        },
+        include: {
+          studentProfile: true,
+          parentProfile: true,
+          teacherProfile: true,
+        },
+      });
+
+      if (!user) {
+        throw new CustomError("User not found with the specified role", 404);
+      }
+
+      const token = await generateToken({
+        id: user.id,
+        role: user.role,
+        email: user.email,
+      });
+
+      res
+        .cookie("token", token, {
+          httpOnly: true,
+        })
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              profile:
+                user.role === "STUDENT"
+                  ? user.studentProfile
+                  : user.role === "PARENT"
+                  ? user.parentProfile
+                  : user.role === "TEACHER"
+                  ? user.teacherProfile
+                  : null,
+            },
+            "User role switched successfully"
+          )
+        );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export const GetUserController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -188,6 +334,7 @@ export const SearchUsersController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const searchParams = req.params.search;
+      const { role, limit = 10, page = 1 } = req.query;
 
       const users = await prisma.user.findMany({
         where: {
@@ -196,6 +343,8 @@ export const SearchUsersController = asyncHandler(
             { email: { contains: searchParams, mode: "insensitive" } },
           ],
         },
+        skip: (Number(page) - 1) * Number(limit),
+        take: Number(limit),
       });
 
       if (!users) {
@@ -217,7 +366,7 @@ export const updateUserController = asyncHandler(
       const id = req.params.id;
       const { name, role, email } = req.body;
 
-      const existingUser = await prisma.user.findFirst({
+      const existingUser = await prisma.user.findUnique({
         where: {
           id: id,
         },
@@ -329,6 +478,56 @@ export const updateStudentParentController = asyncHandler(
   }
 );
 
+export const updateUserProfileController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = (req as any).user?.id;
+      const userRole = (req as any).user?.role;
+      const updates = req.body;
+
+      if (updates.name || updates.email) {
+        await prisma.user.update({
+          where: {
+            id: userId,
+          },
+          data: {
+            ...(updates.name && { name: updates.name }),
+            ...(updates.email && { email: updates.email }),
+          },
+        });
+      }
+
+      let profileUpdate;
+      switch(userRole){
+        switch "TEACHER":
+          if (updates.phone || updates.experienceYears) {
+            profileUpdate=await prisma.teacherProfile.update({
+              where:{
+                userId
+              },
+              data: {
+                ...(updates.phone && { phone: updates.phone }),
+                ...(updates.experienceYears && { experienceYears: updates.experienceYears })
+              }
+            })
+          }
+          break;
+        switch "PARENT":
+          if(updates.phone){
+            profileUpdate = await prisma.parentProfile.update({
+              where: { userId },
+              data: { phone: updates.phone }
+            });
+          }
+          break;
+      }
+      res.status(200).json(new ApiResponse(200, profileUpdate, "Profile updated successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export const addChildToParentController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -392,6 +591,11 @@ export const getAllStudentController = asyncHandler(
               name: true,
               email: true,
               role: true,
+              parentProfile: {
+                select: {
+                  phone: true,
+                },
+              },
             },
           },
         },
@@ -443,17 +647,18 @@ export const getAllParentsController = asyncHandler(
 export const getAllTeachersController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const teachers = await prisma.user.findMany({
-        where: {
-          role: "TEACHER",
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
+      const teachers = await prisma.teacherProfile.findMany({
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
         },
       });
       if (!teachers || teachers.length === 0) {
@@ -462,6 +667,32 @@ export const getAllTeachersController = asyncHandler(
       res
         .status(200)
         .json(new ApiResponse(200, teachers, "Teachers fetched successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+export const getParentChildrenController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const parentId = req.params.id || (req as any).user?.id;
+
+      const children = await prisma.studentProfile.findMany({
+        where: { parentId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              createdAt: true
+            }
+          }
+        }
+      });
+
+      res.status(200).json(new ApiResponse(200, children, "Children fetched successfully"));
     } catch (error) {
       next(error);
     }
@@ -594,31 +825,36 @@ export const searchTeacherController = asyncHandler(
         throw new CustomError("Search term is required", 400);
       }
 
-      const teachers = await prisma.user.findMany({
+      const teachers = await prisma.teacherProfile.findMany({
         where: {
-          role: "TEACHER",
-          OR[
-            {
-              name: {
-                contains: searchTerm,
-                mode: "insensitive",
+          user: {
+            OR: [
+              {
+                name: {
+                  contains: searchTerm,
+                  mode: "insensitive",
+                },
               },
-            },
-            {
-              email: {
-                contains: searchTerm,
-                mode: "insensitive",
+              {
+                email: {
+                  contains: searchTerm,
+                  mode: "insensitive",
+                },
               },
-            },
-          ]
+            ],
+          },
         },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
         },
       });
       if (!teachers || teachers.length === 0) {
@@ -628,6 +864,51 @@ export const searchTeacherController = asyncHandler(
       res
         .status(200)
         .json(new ApiResponse(200, teachers, "Teachers fetched successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// user with profile
+export const getUserProfileController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = (req as any).user?.id;
+      const userRole = (req as any).user?.role;
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          studentProfile: userRole === "STUDENT",
+          parentProfile: userRole === "PARENT",
+          teacherProfile: userRole === "TEACHER",
+        },
+      });
+
+      if (!user) {
+        throw new CustomError("User not found", 404);
+      }
+
+      const profile =
+        user.role === "STUDENT"
+          ? user.studentProfile
+          : user.role === "PARENT"
+          ? user.parentProfile
+          : user.role === "TEACHER"
+          ? user.teacherProfile
+          : null;
+
+      res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            ...user,
+            profile,
+          },
+          "Profile fetched successfully"
+        )
+      );
     } catch (error) {
       next(error);
     }
