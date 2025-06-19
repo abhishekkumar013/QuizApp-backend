@@ -4,6 +4,7 @@ import { CustomError } from "../Lib/error.handler";
 import prisma from "../Lib/prisma";
 import { ApiResponse } from "../Lib/apiResponse";
 import { json } from "stream/consumers";
+import { equal } from "assert";
 
 
 
@@ -54,6 +55,35 @@ interface AuthenticatedRequestforsubmit extends Request {
   };
   body: SubmitQuizRequest;
 }
+
+interface ManualGradingInput {
+  answerId: string;
+  marksAwarded: number;
+  feedback?: string;
+  isCorrect?: boolean;
+}
+
+interface BulkManualGradingRequest {
+  resultId: string;
+  gradings: ManualGradingInput[];
+}
+
+interface SingleManualGradingRequest {
+  answerId: string;
+  marksAwarded: number;
+  feedback?: string;
+  isCorrect?: boolean;
+}
+
+interface AuthenticatedRequestformanualeval extends Request {
+  user?: {
+    id: string;
+    role: string;
+    emai:string;
+    name:string;
+  };
+}
+
 
 
 export const createQuizController = asyncHandler(
@@ -880,10 +910,562 @@ export const submitQuizController = asyncHandler(
   }
 );
 
-// send which question is correct and which is wrong
-export const getQuizReportController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+export const getPendingEvaluationsController = asyncHandler(
+  async (req: AuthenticatedRequestformanualeval, res: Response, next: NextFunction) => {
+    try {
+      const teacherId = req.user?.id;
+      const role=req.user?.role
+      const { quizId, studentId, page = 1, limit = 10 } = req.query;
 
+      if(!teacherId){
+        throw new CustomError("User not authenticated",401);
+      }
+      if(role!=="TEACHER"){
+        throw new CustomError("UnAuthorized Access",403)
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const whereClause: any = {
+        quiz: {
+          createdById: teacherId 
+        },
+        answers: {
+          some: {
+            isCorrect: null 
+          }
+        }
+      };
+
+      if (quizId) {
+        whereClause.quizId = quizId as string;
+      }
+
+      if (studentId) {
+        whereClause.studentId = studentId as string;
+      }
+
+       const [submissions, totalCount] = await Promise.all([
+        prisma.result.findMany({
+          where: whereClause,
+          include: {
+            student: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            quiz: {
+              select: {
+                id: true,
+                title: true,
+                totalMarks: true
+              }
+            },
+            // Get the session to access answers
+            sessions: {
+              where: {
+                id: {
+                  equals: prisma.result.fields.sessionId
+                }
+              },
+              include: {
+                answers: {
+                  where: {
+                    isCorrect: null 
+                  },
+                  include: {
+                    question: {
+                      select: {
+                        id: true,
+                        text: true,
+                        marks: true,
+                        explanation: true
+                      }
+                    }
+                  },
+                  orderBy: {
+                    question: {
+                      order: 'asc'
+                    }
+                  }
+                }
+              }
+            }
+          },
+          orderBy: {
+            submittedAt: 'desc'
+          },
+          skip,
+          take: Number(limit)
+        }),
+        prisma.result.count({ where: whereClause })
+      ]);
+
+      const pendingSubmissions = submissions.filter(submission => 
+        submission.sessions?.some(session => 
+          session.answers.some(answer => answer.isCorrect === null)
+        )
+      );
+
+      return res.status(200).json(
+        new ApiResponse(200, {
+          submissions: pendingSubmissions,
+          pagination: {
+            currentPage: Number(page),
+            totalPages: Math.ceil(totalCount / Number(limit)),
+            totalCount,
+            hasNext: skip + Number(limit) < totalCount,
+            hasPrev: Number(page) > 1
+          }
+        }, "Pending evaluations retrieved successfully")
+      );
+
+    } catch (error) {
+      next(error)
+    }
+  })
+
+// grade
+
+export const gradeAnswerController=asyncHandler(async(req:AuthenticatedRequestformanualevalequest,res:Response,next:NextFunction)=>{
+  try {
+    const teacherId=req.user?.id
+
+    const { answerId, marksAwarded, feedback, isCorrect }: SingleManualGradingRequest = req.body;
+
+    if(!teacherId){
+      throw new CustomError("User not authenticated", 401);
+    }
+    if(req.user?.role!=="TEACEHER"){
+      throw new CustomError("Only teacher can grade ansers",403)
+    }
+
+    if(!answerId || marksAwarded===undefined){
+      throw new CustomError("Try Again!",400)
+    }
+    if(marksAwarded<0){
+      throw new CustomError("Marks awared cannot be negative",400);
+    }
+
+    const answer=await prisma.answer.findFirst({
+      where:{
+        id:answerId,
+        session:{
+          quiz:{
+            categoryId:teacherId
+          }
+        }
+      },
+      include:{
+        question:true,
+        session:{
+          include:{
+            quiz:true
+          }
+        }
+      }
+    })
+
+    if(!answer){
+      throw new CustomError("Answer not found or unauthorized", 404);
+    }
+
+    if (marksAwarded > answer.question.marks) {
+      throw new CustomError(`Marks awarded (${marksAwarded}) cannot exceed question maximum (${answer.question.marks})`, 400);
+    }
+
+    const result=await prisma.$transaction(async(tx)=>{
+      const updatedAnswer=await tx.answer.update({
+        where:{
+          id:answerId,
+        },
+        data:{
+          marksAwarded:marksAwarded,
+          isCorrect:isCorrect!==undefined?isCorrect:marksAwarded>0
+        }
+      })
+      const allAnswers=await tx.answer.findMany({
+        where:{
+          sessionId:answer.sessionId,
+        }
+      })
+      const newScore = allAnswers.reduce((sum, ans) => sum + (ans.marksAwarded || 0), 0);
+      const newCorrectCount = allAnswers.filter(ans => ans.isCorrect === true).length;
+      const newIncorrectCount = allAnswers.filter(ans => ans.isCorrect === false).length;
+      const totalMarks = answer.session.quiz.totalMarks;
+      const newPercentage = totalMarks > 0 ? (newScore / totalMarks) * 100 : 0;
+      const isPassed = newScore >= answer.session.quiz.passingMarks;
+
+        // Update the result
+      const updatedResult = await tx.result.update({
+        where: {
+          sessionId: answer.sessionId
+        },
+        data: {
+          score: newScore,
+          percentage: newPercentage,
+          questionsCorrect: newCorrectCount,
+          questionsIncorrect: newIncorrectCount,
+          isPassed: isPassed
+        }
+      });
+
+      return { updatedAnswer, updatedResult };
+    })
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+          answer: result.updatedAnswer,
+          updatedResult: {
+            score: result.updatedResult.score,
+            percentage: result.updatedResult.percentage,
+            isPassed: result.updatedResult.isPassed
+          }
+        }, "Answer graded successfully")
+      );
+
+  } catch (error) {
+    next(error)
+  }
 })
+
+// bulk grading
+
+export const bulkGradeANswerController=asyncHandler(async(req:AuthenticatedRequestformanualeval,res:Response,next:NextFunction)=>{
+  try {
+    const teacherId=req.user?.id
+
+    const { resultId,gradings }: BulkManualGradingRequest = req.body;
+
+    if(!teacherId){
+      throw new CustomError("User not authenticated", 401);
+    }
+    if(req.user?.role!=="TEACEHER"){
+      throw new CustomError("Only teacher can grade ansers",403)
+    }
+    if (!resultId || !gradings || !Array.isArray(gradings) || gradings.length === 0) {
+      throw new CustomError("Result ID and gradings array are required", 400);
+    }
+
+    for (let i = 0; i < gradings.length; i++) {
+      const grading = gradings[i];
+      if (!grading.answerId || grading.marksAwarded === undefined) {
+        throw new CustomError(`Grading ${i + 1}: Answer ID and marks awarded are required`, 400);
+      }
+      if (grading.marksAwarded < 0) {
+        throw new CustomError(`Grading ${i + 1}: Marks awarded cannot be negative`, 400);
+      }
+    }
+    const result = await prisma.result.findFirst({
+      where: {
+        id: resultId,
+        quiz: {
+          createdById: teacherId
+        }
+      },
+      include: {
+        quiz: true
+      }
+    });
+
+    if (!result) {
+      throw new CustomError("Result not found or unauthorized", 404);
+    }
+
+    const updateResult=await prisma.$transaction(async(tx)=>{
+      const updatedAnswers=[];
+      for(const grading of gradings){
+        const answer=await tx.answer.findFirst({
+          where:{
+            id:grading.answerId,
+            sessionId:result.sessionId!
+          },
+          include:{
+            question:true
+          }
+        })
+        if(!answer){
+          throw new CustomError(`Answer ${grading.answerId} not found`, 404);
+        }
+
+        if(grading.marksAwarded>answer.question.marks){
+          throw new CustomError(
+              `Answer ${grading.answerId}: Marks awarded (${grading.marksAwarded}) cannot exceed question maximum (${answer.question.marks})`,
+              400
+            );
+        }
+
+        const updatedAnswer=await tx.answer.update({
+          where:{
+            id:grading.answerId
+          },
+          data:{
+            marksAwarded:grading.marksAwarded,
+            isCorrect:grading.isCorrect !==undefined ?grading.isCorrect:grading.marksAwarded>0
+          }
+        })
+        updatedAnswers.push(updatedAnswer)
+      }
+       const allAnswers = await tx.answer.findMany({
+          where: {
+            sessionId: result.sessionId!
+          }
+        });
+
+        const newScore = allAnswers.reduce((sum, ans) => sum + (ans.marksAwarded || 0), 0);
+        const newCorrectCount = allAnswers.filter(ans => ans.isCorrect === true).length;
+        const newIncorrectCount = allAnswers.filter(ans => ans.isCorrect === false).length;
+        const totalMarks = result.quiz.totalMarks;
+        const newPercentage = totalMarks > 0 ? (newScore / totalMarks) * 100 : 0;
+        const isPassed = newScore >= result.quiz.passingMarks;
+
+        // Update the result
+        const finalResult = await tx.result.update({
+          where: { id: resultId },
+          data: {
+            score: newScore,
+            percentage: newPercentage,
+            questionsCorrect: newCorrectCount,
+            questionsIncorrect: newIncorrectCount,
+            isPassed: isPassed
+          }
+        });
+
+        return { updatedAnswers, finalResult };
+    })
+
+     return res.status(200).json(
+        new ApiResponse(200, {
+          gradedAnswers: updatedResult.updatedAnswers.length,
+          updatedResult: {
+            score: updatedResult.finalResult.score,
+            percentage: updatedResult.finalResult.percentage,
+            isPassed: updatedResult.finalResult.isPassed
+          }
+        }, `Successfully graded ${updatedResult.updatedAnswers.length} answers`)
+      );
+  } catch (error) {
+    next(error)
+  }
+})
+
+export const gradingStatsController=asyncHandler(async(req:AuthenticatedRequestformanualeval,res:Response,next:NextFunction)=>{
+  try {
+    const teacherId=req.user?.id
+
+    if(!teacherId){
+      throw new CustomError("User not authenticated",401)
+    }
+    if(req.user?.role!=="TEACHER"){
+      throw new CustomError("Only teachers can access grading statistics", 403);
+    }
+    const stats=await prisma.result.findMany({
+      where:{
+        quiz:{
+          createdById:teacherId,
+        }
+      },
+      include:{
+        quiz:{
+          select:{
+            id:true,
+            title:true,
+          }
+        },
+        sessions:{
+          include:{
+            answers:{
+              select:{
+                isCorrect:true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    let totalSubmissions = stats.length;
+      let pendingGrading = 0;
+      let fullyGraded = 0;
+      let partiallyGraded = 0;
+
+      const quizStats: { [key: string]: any } = {};
+
+      for (const result of stats) {
+        const session = result.sessions?.[0];
+        if (!session) continue;
+
+        const answers = session.answers;
+        const pendingAnswers = answers.filter(a => a.isCorrect === null).length;
+        const totalAnswers = answers.length;
+
+        if (pendingAnswers === 0) {
+          fullyGraded++;
+        } else if (pendingAnswers === totalAnswers) {
+          pendingGrading++;
+        } else {
+          partiallyGraded++;
+        }
+
+        // Quiz-specific stats
+        const quizId = result.quiz.id;
+        if (!quizStats[quizId]) {
+          quizStats[quizId] = {
+            quizTitle: result.quiz.title,
+            totalSubmissions: 0,
+            pendingGrading: 0,
+            fullyGraded: 0,
+            partiallyGraded: 0
+          };
+        }
+
+        quizStats[quizId].totalSubmissions++;
+        if (pendingAnswers === 0) {
+          quizStats[quizId].fullyGraded++;
+        } else if (pendingAnswers === totalAnswers) {
+          quizStats[quizId].pendingGrading++;
+        } else {
+          quizStats[quizId].partiallyGraded++;
+        }
+      }
+
+      return res.status(200).json(
+        new ApiResponse(200, {
+          overallStats: {
+            totalSubmissions,
+            pendingGrading,
+            fullyGraded,
+            partiallyGraded,
+            gradingProgress: totalSubmissions > 0 ? (fullyGraded / totalSubmissions) * 100 : 0
+          },
+          quizStats: Object.values(quizStats)
+        }, "Grading statistics retrieved successfully")
+      );
+  } catch (error) {
+    next(error)
+  }
+})
+
+export const getQuizReportController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { quizId, studentId } = req.query;
+
+      if (!quizId || !studentId) {
+        throw new CustomError("quizId and studentId are required", 400);
+      }
+
+      const result = await prisma.result.findFirst({
+        where: {
+          quizId: quizId as string,
+          studentId: studentId as string
+        },
+        orderBy: { submittedAt: 'desc' },
+        include: {
+          quiz: {
+            include: {
+              questions: {
+                include: { options: true },
+                orderBy: { order: 'asc' }
+              }
+            }
+          },
+          student: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          session: {
+            include: {
+              answers: {
+                include: {
+                  option: true,
+                  question: {
+                    include: { options: true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!result || !result.session) {
+        throw new CustomError("Quiz result not found", 404);
+      }
+
+      const answerMap = new Map();
+      result.session.answers.forEach((ans) => {
+        answerMap.set(ans.questionId, ans);
+      });
+
+      const report = result.quiz.questions.map((question) => {
+        const answer = answerMap.get(question.id);
+        const correctOption = question.options.find(opt => opt.isCorrect);
+
+        if (!answer) {
+          // Skipped question
+          return {
+            questionId: question.id,
+            questionText: question.text,
+            selectedOptionId: null,
+            selectedOptionText: null,
+            textAnswer: null,
+            correctOptionId: correctOption?.id || null,
+            correctOptionText: correctOption?.text || null,
+            isCorrect: false,
+            skipped: true,
+            marksAwarded: 0,
+            explanation: question.explanation || null
+          };
+        }
+
+        return {
+          questionId: question.id,
+          questionText: question.text,
+          selectedOptionId: answer.option?.id || null,
+          selectedOptionText: answer.option?.text || null,
+          textAnswer: answer.textAnswer || null,
+          correctOptionId: correctOption?.id || null,
+          correctOptionText: correctOption?.text || null,
+          isCorrect: answer.isCorrect,
+          skipped: false,
+          marksAwarded: answer.marksAwarded,
+          explanation: question.explanation || null
+        };
+      });
+
+      return res.status(200).json(
+        new ApiResponse(200, {
+          student: result.student,
+          quiz: {
+            id: result.quiz.id,
+            title: result.quiz.title,
+            totalMarks: result.totalMarks,
+            score: result.score,
+            percentage: result.percentage,
+            timeTaken: result.timeTaken,
+            questionsAttempted: result.questionsAttempted,
+            questionsCorrect: result.questionsCorrect,
+            questionsIncorrect: result.questionsIncorrect,
+            questionsSkipped: result.questionsSkipped,
+            isPassed: result.isPassed,
+            submittedAt: result.submittedAt
+          },
+          report
+        }, "Quiz report generated successfully")
+      );
+
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 
 export const getAllAttempetedQuiz = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
