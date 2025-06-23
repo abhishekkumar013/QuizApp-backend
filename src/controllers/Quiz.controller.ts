@@ -1467,7 +1467,7 @@ export const getQuizReportController = asyncHandler(
 );
 
 
-export const getAllAttempetedQuiz = asyncHandler(
+export const getAllAttempetedQuizController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req?.user.id;

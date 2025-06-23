@@ -21,7 +21,12 @@ export const getAllResultController = asyncHandler(
             select: {
               id: true,
               title: true,
-              durationInMinutes: true,
+              createdBy: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
         },
@@ -82,16 +87,34 @@ export const getResultByIdController = asyncHandler(
       if (!result) {
         throw new CustomError("Result not found", 404);
       }
+
+      const rankfinder=await prisma.result.findMany({
+        where:{
+          quizId: id
+        },
+        orderBy:{
+          score:"desc"
+        },
+        select:{
+          studentId:true,
+          score:true
+        }
+      })
+
+      const studentrank=rankfinder.findIndex((s)=>s.studentId===studentId)+1;
+
       res
         .status(200)
-        .json(new ApiResponse(200, result, "Result retrieved successfully"));
+        .json(new ApiResponse(200, {...result ,  rank:studentrank}, "Result retrieved successfully"));
     } catch (error) {
       next(error);
     }
   }
 );
 
-export const quizRankController = asyncHandler(
+
+// rank for a particular quiz
+export const getAllStudentRankController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const quizId = req.params.id;
@@ -102,25 +125,45 @@ export const quizRankController = asyncHandler(
         where: {
           quizId: quizId,
         },
-        orderBy: {
-          score: "desc",
-        },
         include: {
           student: {
             select: {
-              id: true,
               name: true,
+              email: true,
+              id: true,
             },
           },
+        },
+        orderBy: {
+          score: "desc",
         },
       });
       if (!results || results.length === 0) {
         throw new CustomError("No results found for this quiz", 404);
       }
+
+      const rankedResults = results.map((result, index) => ({
+        rank: index + 1,
+        studentId: result.studentId,
+        studentName: result.student.name,
+        studentEmail: result.student.email,
+        score: result.score,
+        percentage: result.percentage,
+        totalMarks: result.totalMarks,
+        questionsAttempted: result.questionsAttempted,
+        questionsCorrect: result.questionsCorrect,
+        questionsIncorrect: result.questionsIncorrect,
+        questionsSkipped: result.questionsSkipped,
+        timeTaken: result.timeTaken,
+        isPassed: result.isPassed,
+        attemptNumber: result.attemptNumber,
+        submittedAt: result.submittedAt,
+      }));
+
       return res
         .status(200)
         .json(
-          new ApiResponse(200, results, "Quiz ranks retrieved successfully")
+          new ApiResponse(200, results:rankedResults, "Quiz ranks retrieved successfully")
         );
     } catch (error) {
       next(error);

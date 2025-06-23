@@ -11,9 +11,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/hello", (req, res) => {
-  res.send("Welcome to the API!");
-});
+import AuthRoutes from "./routers/auth.routes";
+import QuizRoutes from "./routers/quiz.routes";
+import ResultRoutes from "./routers/result.routes";
+
+app.use("/api/v1/auth", AuthRoutes);
+app.use("/api/v1/quiz", QuizRoutes);
+app.use("/api/v1/result", ResultRoutes);
+
 const PORT = process.env.PORT || 8081;
 app.listen(PORT, () => {
   console.log("Server is running on port " + PORT);
