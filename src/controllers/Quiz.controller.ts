@@ -6,8 +6,6 @@ import { ApiResponse } from "../Lib/apiResponse";
 import { json } from "stream/consumers";
 import { equal } from "assert";
 
-
-
 interface QuestionInput {
   text: string;
   score: number;
@@ -27,8 +25,8 @@ interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     role: string;
-    email:string;
-    name:string;
+    email: string;
+    name: string;
   };
   body: AddQuestionsRequest;
 }
@@ -36,13 +34,13 @@ interface AuthenticatedRequest extends Request {
 interface SubmitAnswerInput {
   questionId: string;
   selectedOptionId?: string;
-  textAnswer?: string; 
+  textAnswer?: string;
 }
 
 interface SubmitQuizRequest {
   quizId: string;
-  sessionId: string; 
-  timeTaken: number; 
+  sessionId: string;
+  timeTaken: number;
   answers: SubmitAnswerInput[];
 }
 
@@ -50,8 +48,8 @@ interface AuthenticatedRequestforsubmit extends Request {
   user?: {
     id: string;
     role: string;
-    email:string;
-    name:string;
+    email: string;
+    name: string;
   };
   body: SubmitQuizRequest;
 }
@@ -79,12 +77,10 @@ interface AuthenticatedRequestformanualeval extends Request {
   user?: {
     id: string;
     role: string;
-    emai:string;
-    name:string;
+    emai: string;
+    name: string;
   };
 }
-
-
 
 export const createQuizController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -160,7 +156,6 @@ export const createQuizController = asyncHandler(
   }
 );
 
-
 export const addQuestionsToQuiz = asyncHandler(
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
@@ -183,43 +178,67 @@ export const addQuestionsToQuiz = asyncHandler(
       // Validate each question
       for (let i = 0; i < questions.length; i++) {
         const question = questions[i];
-        
-        if (!question.text || question.text.trim() === '') {
+
+        if (!question.text || question.text.trim() === "") {
           throw new CustomError(`Question ${i + 1}: text is required`, 400);
         }
-        
-        if (typeof question.score !== 'number' || question.score < 0) {
-          throw new CustomError(`Question ${i + 1}: score must be a non-negative number`, 400);
+
+        if (typeof question.score !== "number" || question.score < 0) {
+          throw new CustomError(
+            `Question ${i + 1}: score must be a non-negative number`,
+            400
+          );
         }
-        
-        if (typeof question.order !== 'number' || question.order < 0) {
-          throw new CustomError(`Question ${i + 1}: order must be a non-negative number`, 400);
+
+        if (typeof question.order !== "number" || question.order < 0) {
+          throw new CustomError(
+            `Question ${i + 1}: order must be a non-negative number`,
+            400
+          );
         }
-        
-        if (!question.options || !Array.isArray(question.options) || question.options.length === 0) {
-          throw new CustomError(`Question ${i + 1}: options array is required and must not be empty`, 400);
+
+        if (
+          !question.options ||
+          !Array.isArray(question.options) ||
+          question.options.length === 0
+        ) {
+          throw new CustomError(
+            `Question ${
+              i + 1
+            }: options array is required and must not be empty`,
+            400
+          );
         }
-        
+
         // Validate options
         let hasCorrectAnswer = false;
         for (let j = 0; j < question.options.length; j++) {
           const option = question.options[j];
-          
-          if (!option.text || option.text.trim() === '') {
-            throw new CustomError(`Question ${i + 1}, Option ${j + 1}: text is required`, 400);
+
+          if (!option.text || option.text.trim() === "") {
+            throw new CustomError(
+              `Question ${i + 1}, Option ${j + 1}: text is required`,
+              400
+            );
           }
-          
-          if (typeof option.isCorrect !== 'boolean') {
-            throw new CustomError(`Question ${i + 1}, Option ${j + 1}: isCorrect must be a boolean`, 400);
+
+          if (typeof option.isCorrect !== "boolean") {
+            throw new CustomError(
+              `Question ${i + 1}, Option ${j + 1}: isCorrect must be a boolean`,
+              400
+            );
           }
-          
+
           if (option.isCorrect) {
             hasCorrectAnswer = true;
           }
         }
-        
+
         if (!hasCorrectAnswer) {
-          throw new CustomError(`Question ${i + 1}: at least one option must be marked as correct`, 400);
+          throw new CustomError(
+            `Question ${i + 1}: at least one option must be marked as correct`,
+            400
+          );
         }
       }
 
@@ -232,14 +251,17 @@ export const addQuestionsToQuiz = asyncHandler(
       });
 
       if (!isUserCreateQuiz) {
-        throw new CustomError("You are not authorized to add questions to this quiz", 403);
+        throw new CustomError(
+          "You are not authorized to add questions to this quiz",
+          403
+        );
       }
 
       // Get the current highest order number for existing questions
       const lastQuestion = await prisma.question.findFirst({
         where: { quizId },
-        orderBy: { order: 'desc' },
-        select: { order: true }
+        orderBy: { order: "desc" },
+        select: { order: true },
       });
 
       let currentMaxOrder = lastQuestion?.order || 0;
@@ -249,7 +271,7 @@ export const addQuestionsToQuiz = asyncHandler(
         const questionPromises = questions.map(async (question, index) => {
           // Auto-increment order if not provided or if there's a conflict
           const questionOrder = question.order || currentMaxOrder + index + 1;
-          
+
           return await tx.question.create({
             data: {
               text: question.text.trim(),
@@ -257,7 +279,8 @@ export const addQuestionsToQuiz = asyncHandler(
               explanation: question.explanation?.trim() || null,
               marks: question.marks || 1,
               order: questionOrder,
-              isRequired: question.isRequired !== undefined ? question.isRequired : true,
+              isRequired:
+                question.isRequired !== undefined ? question.isRequired : true,
               quizId: quizId,
               options: {
                 create: question.options.map((opt, optIndex) => ({
@@ -277,33 +300,35 @@ export const addQuestionsToQuiz = asyncHandler(
       });
 
       // Update quiz total marks
-      const totalMarksToAdd = questions.reduce((sum, q) => sum + (q.marks || 1), 0);
+      const totalMarksToAdd = questions.reduce(
+        (sum, q) => sum + (q.marks || 1),
+        0
+      );
       await prisma.quiz.update({
         where: { id: quizId },
         data: {
           totalMarks: {
-            increment: totalMarksToAdd
-          }
-        }
+            increment: totalMarksToAdd,
+          },
+        },
       });
       await prisma.quiz.update({
-        where:{
-          id:quizId
+        where: {
+          id: quizId,
         },
-        data:{
-          status:"PUBLISHED"
-        }
-      })
-      
+        data: {
+          status: "PUBLISHED",
+        },
+      });
 
       return res.status(201).json(
         new ApiResponse(
-          201, 
+          201,
           {
             questionsAdded: createdQuestions.length,
             questions: createdQuestions,
-            totalMarksAdded: totalMarksToAdd
-          }, 
+            totalMarksAdded: totalMarksToAdd,
+          },
           "Questions added successfully"
         )
       );
@@ -313,119 +338,124 @@ export const addQuestionsToQuiz = asyncHandler(
   }
 );
 
-
 // this controller is used to get all the quiz and show on front where user select which quiz he need to attempt
-export const getAllQuizController = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const userId = req.user?.id;
+export const getAllQuizController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.id;
 
-    if (!userId) {
-      throw new CustomError("Unauthorized", 401);
-    }
-
-    // Find the studentProfileId from userId
-    const studentProfile = await prisma.studentProfile.findFirst({
-      where: { userId },
-      select: { id: true },
-    });
-
-    if (!studentProfile) {
-      throw new CustomError("Student profile not found", 404);
-    }
-
-    const studentProfileId = studentProfile.id;
-
-    // Fetch all public quizzes
-    const publicQuizzes = await prisma.quiz.findMany({
-      where: {
-        accessType: "PUBLIC",
-        status:"PUBLISHED",
-        endTime: { lte: new Date() },
-      },
-      select: {
-        id: true,
-        title: true,
-        description:true,
-        instructions:true,
-        status:true,
-        durationInMinutes: true,
-        difficulty:true,
-        totalMarks:true,
-        maxAttempts:true,
-        startTime: true,
-        endTime: true,
-        category: {
-          select: { id: true, name: true }
-        },
-        createdBy: {
-          select: { id: true, name: true, email: true }
-        },
-      },
-    });
-
-    // Fetch assigned quizzes to the student
-    const assignedQuizzes = await prisma.quizAssignment.findMany({
-      where: {
-        studentId: studentProfileId,
-        quiz: {
-          endTime: { lte: new Date() },
-        }
-      },
-      select: {
-        quiz: {
-          select: {
-            id: true,
-            title: true,
-            description:true,
-            instructions:true,
-            status:true,
-            durationInMinutes: true,
-            difficulty:true,
-            totalMarks:true,
-            maxAttempts:true,
-            startTime: true,
-            endTime: true,
-            category: {
-              select: { id: true, name: true }
-            },
-            createdBy: {
-              select: { id: true, name: true, email: true }
-            },
-          }
-        }
+      if (!userId) {
+        throw new CustomError("Unauthorized", 401);
       }
-    });
 
-    const assignedQuizList = assignedQuizzes.map(q => q.quiz);
+      // Find the studentProfileId from userId
+      const studentProfile = await prisma.studentProfile.findFirst({
+        where: { userId },
+        select: { id: true },
+      });
 
-    return res.status(200).json(
-      new ApiResponse(200, {
-        publicQuizzes,
-        assignedQuizzes: assignedQuizList
-      }, "Quizzes fetched successfully")
-    );
-  } catch (error) {
-    next(error);
+      if (!studentProfile) {
+        throw new CustomError("Student profile not found", 404);
+      }
+
+      const studentProfileId = studentProfile.id;
+
+      // Fetch all public quizzes
+      const publicQuizzes = await prisma.quiz.findMany({
+        where: {
+          accessType: "PUBLIC",
+          status: "PUBLISHED",
+          endTime: { lte: new Date() },
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          instructions: true,
+          status: true,
+          durationInMinutes: true,
+          difficulty: true,
+          totalMarks: true,
+          maxAttempts: true,
+          startTime: true,
+          endTime: true,
+          category: {
+            select: { id: true, name: true },
+          },
+          createdBy: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
+
+      // Fetch assigned quizzes to the student
+      const assignedQuizzes = await prisma.quizAssignment.findMany({
+        where: {
+          studentId: studentProfileId,
+          quiz: {
+            endTime: { lte: new Date() },
+          },
+        },
+        select: {
+          quiz: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              instructions: true,
+              status: true,
+              durationInMinutes: true,
+              difficulty: true,
+              totalMarks: true,
+              maxAttempts: true,
+              startTime: true,
+              endTime: true,
+              category: {
+                select: { id: true, name: true },
+              },
+              createdBy: {
+                select: { id: true, name: true, email: true },
+              },
+            },
+          },
+        },
+      });
+
+      const assignedQuizList = assignedQuizzes.map((q) => q.quiz);
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            publicQuizzes,
+            assignedQuizzes: assignedQuizList,
+          },
+          "Quizzes fetched successfully"
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 export const getQuizByIdController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { id } = req.params;
-        if (!id) {
-            throw new CustomError("Quiz ID is required", 400);
-        }
+      const { id } = req.params;
+      if (!id) {
+        throw new CustomError("Quiz ID is required", 400);
+      }
 
-       const quiz = await prisma.quiz.findUnique({
+      const quiz = await prisma.quiz.findUnique({
         where: { id },
         select: {
           id: true,
           title: true,
-          description:true,
-          instructions:true,
-          totalMarks:true,
-          maxAttempts:true,
+          description: true,
+          instructions: true,
+          totalMarks: true,
+          maxAttempts: true,
           durationInMinutes: true,
           startTime: true,
           endTime: true,
@@ -438,7 +468,7 @@ export const getQuizByIdController = asyncHandler(
           },
           questions: {
             include: {
-              options: true
+              options: true,
             },
           },
           category: {
@@ -454,193 +484,207 @@ export const getQuizByIdController = asyncHandler(
         throw new CustomError("Quiz not found", 404);
       }
 
-
-      const isAssigned=await prisma.quizAssignment.findFirst({
+      const isAssigned = await prisma.quizAssignment.findFirst({
         where: {
           quizId: id,
           studentId: req.user?.id, // Assuming user ID is stored in req.user
         },
-      })
-      if(!isAssigned && quiz.accessType !== "PUBLIC") {
+      });
+      if (!isAssigned && quiz.accessType !== "PUBLIC") {
         throw new CustomError("You are not authorized to view this quiz", 403);
       }
 
-      return res.status(200).json(new ApiResponse(200, quiz, "Quiz fetched successfully"));
+      return res
+        .status(200)
+        .json(new ApiResponse(200, quiz, "Quiz fetched successfully"));
     } catch (error) {
       next(error);
     }
   }
 );
 
-export const getQuizByCategoryController=asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+export const getQuizByCategoryController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { categoryId } = req.params;
-        
-        if (!categoryId) {
-            throw new CustomError("Category ID is required", 400);
-        }
+      const { categoryId } = req.params;
 
-        const isCategory = await prisma.category.findUnique({
-            where: {
-                id: categoryId
-            }
-        });
-        if (!isCategory) {
-            throw new CustomError("Category not found", 404);
-        }
+      if (!categoryId) {
+        throw new CustomError("Category ID is required", 400);
+      }
 
-        const quizess=await prisma.quiz.findMany({
-            where:{
-                categoryId: categoryId,
-                accessType: "PUBLIC",
-                status:"PUBLISHED",
-                endTime:{lte: new Date()}
+      const isCategory = await prisma.category.findUnique({
+        where: {
+          id: categoryId,
+        },
+      });
+      if (!isCategory) {
+        throw new CustomError("Category not found", 404);
+      }
+
+      const quizess = await prisma.quiz.findMany({
+        where: {
+          categoryId: categoryId,
+          accessType: "PUBLIC",
+          status: "PUBLISHED",
+          endTime: { lte: new Date() },
+        },
+        select: {
+          id: true,
+          title: true,
+          durationInMinutes: true,
+          description: true,
+          instructions: true,
+          difficulty: true,
+          totalMarks: true,
+          maxAttempts: true,
+          startTime: true,
+          endTime: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
             },
-            select:{
-                id: true,
-                title: true,
-                durationInMinutes: true,
-                description:true,
-                instructions:true,
-                difficulty:true,
-                totalMarks:true,
-                maxAttempts:true,
-                startTime: true,
-                endTime: true,
-                createdBy: {
-                    select: {
-                        id: true,
-                        name: true,
-                        email: true
-                    }
-                },
-                category: {
-                    select: {
-                        id: true,
-                        name: true
-                    }
-                },
-            }
-        })
-
-        const assignedQuiz=await prisma.quizAssignment.findMany({
-          where:{
-            studentId:req.user?.id
           },
-          select:{
-            quiz: {
-              select: {
-                id: true,
-                title: true,
-                description:true,
-                instructions:true,
-                durationInMinutes: true,
-                totalMarks:true,
-                maxAttempts:true,
-                difficulty:true,
-                startTime: true,
-                endTime: true,
-                category: {
-                  select: { id: true, name: true }
-                },
-                createdBy: {
-                  select: { id: true, name: true, email: true }
-                },
-              }
-            }
-          }
-        })
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
 
-        if (!quizess || quizess.length === 0) {
-            throw new CustomError("No quizzes found for this category", 404);
-        }
+      const assignedQuiz = await prisma.quizAssignment.findMany({
+        where: {
+          studentId: req.user?.id,
+        },
+        select: {
+          quiz: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              instructions: true,
+              durationInMinutes: true,
+              totalMarks: true,
+              maxAttempts: true,
+              difficulty: true,
+              startTime: true,
+              endTime: true,
+              category: {
+                select: { id: true, name: true },
+              },
+              createdBy: {
+                select: { id: true, name: true, email: true },
+              },
+            },
+          },
+        },
+      });
 
-        return res.status(200).json(new ApiResponse(200, quizess, "Quizzes fetched successfully"));
+      if (!quizess || quizess.length === 0) {
+        throw new CustomError("No quizzes found for this category", 404);
+      }
 
+      return res
+        .status(200)
+        .json(new ApiResponse(200, quizess, "Quizzes fetched successfully"));
     } catch (error) {
-        next(error)
+      next(error);
     }
-  })
-
-
-export const deleteQuizController = asyncHandler(async(req: Request, res: Response, next: NextFunction) => {
-  try {
-    const id=req.params.id
-    if (!id) {
-      throw new CustomError("Quiz ID is required", 400);
-    }
-
-    const userId=req.user?.id; 
-
-    const isUserCreateQuiz = await prisma.quiz.findFirst({
-      where:{
-        createdBy:userId
-      }
-    })
-    if (!isUserCreateQuiz) {
-      throw new CustomError("You are not authorized to delete this quiz", 403);
-    }
-
-    const allquestions=await prisma.question.findMany({
-      where:{
-        quizId:id
-      }
-    })
-
-    const questionid=allquestions.map((q)=>q.id)
-
-    await prisma.option.deleteMany({
-      where:{
-        questionId:{
-          in: questionid
-        }
-      }
-    })
-
-    await prisma.question.deleteMany({
-      where:{
-        quizId:id
-      }
-    })
-    await prisma.quiz.delete({
-      where: {
-        id: id,
-      },
-    })
-
-    return res.status(200).json(new ApiResponse(200, null, "Quiz deleted successfully"));
-
-  } catch (error) {
-    next(error);
   }
-})
+);
+
+export const deleteQuizController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.params.id;
+      if (!id) {
+        throw new CustomError("Quiz ID is required", 400);
+      }
+
+      const userId = req.user?.id;
+
+      const isUserCreateQuiz = await prisma.quiz.findFirst({
+        where: {
+          createdBy: userId,
+        },
+      });
+      if (!isUserCreateQuiz) {
+        throw new CustomError(
+          "You are not authorized to delete this quiz",
+          403
+        );
+      }
+
+      const allquestions = await prisma.question.findMany({
+        where: {
+          quizId: id,
+        },
+      });
+
+      const questionid = allquestions.map((q) => q.id);
+
+      await prisma.option.deleteMany({
+        where: {
+          questionId: {
+            in: questionid,
+          },
+        },
+      });
+
+      await prisma.question.deleteMany({
+        where: {
+          quizId: id,
+        },
+      });
+      await prisma.quiz.delete({
+        where: {
+          id: id,
+        },
+      });
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, null, "Quiz deleted successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export const startQuizController = asyncHandler(async (req, res, next) => {
   const { quizId } = req.body;
   const id = req.user?.id;
-  const profile=await prisma.studentProfile.findFirst({
-    where:{
-      userId:id
-    }
-  })
-  
+  const profile = await prisma.studentProfile.findFirst({
+    where: {
+      userId: id,
+    },
+  });
+
   // quiz session
   const session = await prisma.quizSession.create({
     data: {
       quizId,
       studentId,
-      studentProfileId:profile?.id,
-      status: 'IN_PROGRESS',
-      startedAt: new Date()
-    }
+      studentProfileId: profile?.id,
+      status: "IN_PROGRESS",
+      startedAt: new Date(),
+    },
   });
-  
-  return res.json(new ApiResponse(200, { sessionId: session.id }, "Quiz started"));
+
+  return res.json(
+    new ApiResponse(200, { sessionId: session.id }, "Quiz started")
+  );
 });
 
-
 export const submitQuizController = asyncHandler(
-  async (req: AuthenticatedRequestforsubmit, res: Response, next: NextFunction) => {
+  async (
+    req: AuthenticatedRequestforsubmit,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const { quizId, sessionId, timeTaken, answers } = req.body;
       const studentId = req.user?.id;
@@ -650,8 +694,16 @@ export const submitQuizController = asyncHandler(
       }
 
       // Validate required fields
-      if (!quizId || !sessionId || timeTaken === undefined || !Array.isArray(answers)) {
-        throw new CustomError("Quiz ID, session ID, time taken, and answers are required", 400);
+      if (
+        !quizId ||
+        !sessionId ||
+        timeTaken === undefined ||
+        !Array.isArray(answers)
+      ) {
+        throw new CustomError(
+          "Quiz ID, session ID, time taken, and answers are required",
+          400
+        );
       }
 
       if (timeTaken < 0) {
@@ -664,15 +716,18 @@ export const submitQuizController = asyncHandler(
           id: sessionId,
           quizId: quizId,
           studentId: studentId,
-          status: 'IN_PROGRESS'
+          status: "IN_PROGRESS",
         },
         include: {
-          studentProfile: true
-        }
+          studentProfile: true,
+        },
       });
 
       if (!quizSession) {
-        throw new CustomError("Invalid quiz session or session already completed", 400);
+        throw new CustomError(
+          "Invalid quiz session or session already completed",
+          400
+        );
       }
 
       // Fetch quiz with questions and options
@@ -683,7 +738,7 @@ export const submitQuizController = asyncHandler(
             include: {
               options: true,
             },
-            orderBy: { order: 'asc' }
+            orderBy: { order: "asc" },
           },
         },
       });
@@ -699,18 +754,28 @@ export const submitQuizController = asyncHandler(
       }
 
       // Validate answers
-      const questionIds = quiz.questions.map(q => q.id);
+      const questionIds = quiz.questions.map((q) => q.id);
       for (const answer of answers) {
         if (!questionIds.includes(answer.questionId)) {
-          throw new CustomError(`Invalid question ID: ${answer.questionId}`, 400);
+          throw new CustomError(
+            `Invalid question ID: ${answer.questionId}`,
+            400
+          );
         }
-        
+
         // For multiple choice, ensure option exists and belongs to the question
         if (answer.selectedOptionId) {
-          const question = quiz.questions.find(q => q.id === answer.questionId);
-          const optionExists = question?.options.some(opt => opt.id === answer.selectedOptionId);
+          const question = quiz.questions.find(
+            (q) => q.id === answer.questionId
+          );
+          const optionExists = question?.options.some(
+            (opt) => opt.id === answer.selectedOptionId
+          );
           if (!optionExists) {
-            throw new CustomError(`Invalid option ID: ${answer.selectedOptionId} for question: ${answer.questionId}`, 400);
+            throw new CustomError(
+              `Invalid option ID: ${answer.selectedOptionId} for question: ${answer.questionId}`,
+              400
+            );
           }
         }
       }
@@ -730,12 +795,15 @@ export const submitQuizController = asyncHandler(
         // Process each question
         for (const question of quiz.questions) {
           totalMarks += question.marks;
-          const userAnswer = answers.find(a => a.questionId === question.id);
-          
-          if (!userAnswer || (!userAnswer.selectedOptionId && !userAnswer.textAnswer)) {
+          const userAnswer = answers.find((a) => a.questionId === question.id);
+
+          if (
+            !userAnswer ||
+            (!userAnswer.selectedOptionId && !userAnswer.textAnswer)
+          ) {
             // Question was skipped
             questionsSkipped++;
-            
+
             // Still create an answer record for skipped questions
             const answerRecord = await tx.answer.create({
               data: {
@@ -744,32 +812,36 @@ export const submitQuizController = asyncHandler(
                 optionId: null,
                 textAnswer: null,
                 isCorrect: false,
-                marksAwarded: 0
-              }
+                marksAwarded: 0,
+              },
             });
             answerRecords.push(answerRecord);
-            
+
             evaluation.push({
               questionId: question.id,
               questionText: question.text,
               selectedOptionId: null,
               selectedOptionText: null,
               textAnswer: null,
-              correctOptionId: question.options.find(opt => opt.isCorrect)?.id || null,
-              correctOptionText: question.options.find(opt => opt.isCorrect)?.text || null,
+              correctOptionId:
+                question.options.find((opt) => opt.isCorrect)?.id || null,
+              correctOptionText:
+                question.options.find((opt) => opt.isCorrect)?.text || null,
               isCorrect: false,
               marksAwarded: 0,
-              skipped: true
+              skipped: true,
             });
             continue;
           }
 
           questionsAttempted++;
-          
+
           // Handle multiple choice questions
           if (userAnswer.selectedOptionId) {
-            const selectedOption = question.options.find(o => o.id === userAnswer.selectedOptionId);
-            const correctOption = question.options.find(opt => opt.isCorrect);
+            const selectedOption = question.options.find(
+              (o) => o.id === userAnswer.selectedOptionId
+            );
+            const correctOption = question.options.find((opt) => opt.isCorrect);
             const isCorrect = selectedOption?.isCorrect || false;
             const marksAwarded = isCorrect ? question.marks : 0;
 
@@ -788,8 +860,8 @@ export const submitQuizController = asyncHandler(
                 optionId: userAnswer.selectedOptionId,
                 textAnswer: null,
                 isCorrect: isCorrect,
-                marksAwarded: marksAwarded
-              }
+                marksAwarded: marksAwarded,
+              },
             });
             answerRecords.push(answerRecord);
 
@@ -803,7 +875,7 @@ export const submitQuizController = asyncHandler(
               correctOptionText: correctOption?.text || null,
               isCorrect: isCorrect,
               marksAwarded: marksAwarded,
-              skipped: false
+              skipped: false,
             });
           }
           // Handle text/essay questions
@@ -815,9 +887,9 @@ export const submitQuizController = asyncHandler(
                 questionId: question.id,
                 optionId: null,
                 textAnswer: userAnswer.textAnswer.trim(),
-                isCorrect: null, 
-                marksAwarded: 0 
-              }
+                isCorrect: null,
+                marksAwarded: 0,
+              },
             });
             answerRecords.push(answerRecord);
 
@@ -832,7 +904,7 @@ export const submitQuizController = asyncHandler(
               isCorrect: null, // Pending manual grading
               marksAwarded: 0, // Pending manual grading
               skipped: false,
-              needsManualGrading: true
+              needsManualGrading: true,
             });
           }
         }
@@ -841,10 +913,10 @@ export const submitQuizController = asyncHandler(
         const updatedSession = await tx.quizSession.update({
           where: { id: sessionId },
           data: {
-            status: 'COMPLETED',
+            status: "COMPLETED",
             submittedAt: new Date(),
-            timeSpent: timeTaken
-          }
+            timeSpent: timeTaken,
+          },
         });
 
         // Calculate percentage
@@ -855,8 +927,8 @@ export const submitQuizController = asyncHandler(
         const previousAttempts = await tx.result.count({
           where: {
             quizId: quizId,
-            studentId: studentId
-          }
+            studentId: studentId,
+          },
         });
 
         // Create result record
@@ -875,35 +947,38 @@ export const submitQuizController = asyncHandler(
             timeTaken: timeTaken,
             isPassed: isPassed,
             attemptNumber: previousAttempts + 1,
-            submittedAt: new Date()
-          }
+            submittedAt: new Date(),
+          },
         });
 
         return {
           result: quizResult,
           evaluation: evaluation,
-          session: updatedSession
+          session: updatedSession,
         };
       });
 
       // Return success response
       return res.status(200).json(
-        new ApiResponse(200, {
-          score: result.result.score,
-          totalMarks: result.result.totalMarks,
-          percentage: result.result.percentage,
-          questionsAttempted: result.result.questionsAttempted,
-          questionsCorrect: result.result.questionsCorrect,
-          questionsIncorrect: result.result.questionsIncorrect,
-          questionsSkipped: result.result.questionsSkipped,
-          timeTaken: result.result.timeTaken,
-          isPassed: result.result.isPassed,
-          attemptNumber: result.result.attemptNumber,
-          evaluation: quiz.showResults ? result.evaluation : null, // Only show if quiz allows it
-          submittedAt: result.result.submittedAt
-        }, "Quiz submitted successfully")
+        new ApiResponse(
+          200,
+          {
+            score: result.result.score,
+            totalMarks: result.result.totalMarks,
+            percentage: result.result.percentage,
+            questionsAttempted: result.result.questionsAttempted,
+            questionsCorrect: result.result.questionsCorrect,
+            questionsIncorrect: result.result.questionsIncorrect,
+            questionsSkipped: result.result.questionsSkipped,
+            timeTaken: result.result.timeTaken,
+            isPassed: result.result.isPassed,
+            attemptNumber: result.result.attemptNumber,
+            evaluation: quiz.showResults ? result.evaluation : null, // Only show if quiz allows it
+            submittedAt: result.result.submittedAt,
+          },
+          "Quiz submitted successfully"
+        )
       );
-
     } catch (error) {
       next(error);
     }
@@ -911,30 +986,34 @@ export const submitQuizController = asyncHandler(
 );
 
 export const getPendingEvaluationsController = asyncHandler(
-  async (req: AuthenticatedRequestformanualeval, res: Response, next: NextFunction) => {
+  async (
+    req: AuthenticatedRequestformanualeval,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const teacherId = req.user?.id;
-      const role=req.user?.role
+      const role = req.user?.role;
       const { quizId, studentId, page = 1, limit = 10 } = req.query;
 
-      if(!teacherId){
-        throw new CustomError("User not authenticated",401);
+      if (!teacherId) {
+        throw new CustomError("User not authenticated", 401);
       }
-      if(role!=="TEACHER"){
-        throw new CustomError("UnAuthorized Access",403)
+      if (role !== "TEACHER") {
+        throw new CustomError("UnAuthorized Access", 403);
       }
 
       const skip = (Number(page) - 1) * Number(limit);
 
       const whereClause: any = {
         quiz: {
-          createdById: teacherId 
+          createdById: teacherId,
         },
         answers: {
           some: {
-            isCorrect: null 
-          }
-        }
+            isCorrect: null,
+          },
+        },
       };
 
       if (quizId) {
@@ -945,7 +1024,7 @@ export const getPendingEvaluationsController = asyncHandler(
         whereClause.studentId = studentId as string;
       }
 
-       const [submissions, totalCount] = await Promise.all([
+      const [submissions, totalCount] = await Promise.all([
         prisma.result.findMany({
           where: whereClause,
           include: {
@@ -953,27 +1032,27 @@ export const getPendingEvaluationsController = asyncHandler(
               select: {
                 id: true,
                 name: true,
-                email: true
-              }
+                email: true,
+              },
             },
             quiz: {
               select: {
                 id: true,
                 title: true,
-                totalMarks: true
-              }
+                totalMarks: true,
+              },
             },
             // Get the session to access answers
             sessions: {
               where: {
                 id: {
-                  equals: prisma.result.fields.sessionId
-                }
+                  equals: prisma.result.fields.sessionId,
+                },
               },
               include: {
                 answers: {
                   where: {
-                    isCorrect: null 
+                    isCorrect: null,
                   },
                   include: {
                     question: {
@@ -981,244 +1060,300 @@ export const getPendingEvaluationsController = asyncHandler(
                         id: true,
                         text: true,
                         marks: true,
-                        explanation: true
-                      }
-                    }
+                        explanation: true,
+                      },
+                    },
                   },
                   orderBy: {
                     question: {
-                      order: 'asc'
-                    }
-                  }
-                }
-              }
-            }
+                      order: "asc",
+                    },
+                  },
+                },
+              },
+            },
           },
           orderBy: {
-            submittedAt: 'desc'
+            submittedAt: "desc",
           },
           skip,
-          take: Number(limit)
+          take: Number(limit),
         }),
-        prisma.result.count({ where: whereClause })
+        prisma.result.count({ where: whereClause }),
       ]);
 
-      const pendingSubmissions = submissions.filter(submission => 
-        submission.sessions?.some(session => 
-          session.answers.some(answer => answer.isCorrect === null)
+      const pendingSubmissions = submissions.filter((submission) =>
+        submission.sessions?.some((session) =>
+          session.answers.some((answer) => answer.isCorrect === null)
         )
       );
 
       return res.status(200).json(
-        new ApiResponse(200, {
-          submissions: pendingSubmissions,
-          pagination: {
-            currentPage: Number(page),
-            totalPages: Math.ceil(totalCount / Number(limit)),
-            totalCount,
-            hasNext: skip + Number(limit) < totalCount,
-            hasPrev: Number(page) > 1
-          }
-        }, "Pending evaluations retrieved successfully")
+        new ApiResponse(
+          200,
+          {
+            submissions: pendingSubmissions,
+            pagination: {
+              currentPage: Number(page),
+              totalPages: Math.ceil(totalCount / Number(limit)),
+              totalCount,
+              hasNext: skip + Number(limit) < totalCount,
+              hasPrev: Number(page) > 1,
+            },
+          },
+          "Pending evaluations retrieved successfully"
+        )
       );
-
     } catch (error) {
-      next(error)
+      next(error);
     }
-  })
+  }
+);
 
 // grade
 
-export const gradeAnswerController=asyncHandler(async(req:AuthenticatedRequestformanualevalequest,res:Response,next:NextFunction)=>{
-  try {
-    const teacherId=req.user?.id
+export const gradeAnswerController = asyncHandler(
+  async (
+    req: AuthenticatedRequestformanualevalequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const teacherId = req.user?.id;
 
-    const { answerId, marksAwarded, feedback, isCorrect }: SingleManualGradingRequest = req.body;
+      const {
+        answerId,
+        marksAwarded,
+        feedback,
+        isCorrect,
+      }: SingleManualGradingRequest = req.body;
 
-    if(!teacherId){
-      throw new CustomError("User not authenticated", 401);
-    }
-    if(req.user?.role!=="TEACEHER"){
-      throw new CustomError("Only teacher can grade ansers",403)
-    }
-
-    if(!answerId || marksAwarded===undefined){
-      throw new CustomError("Try Again!",400)
-    }
-    if(marksAwarded<0){
-      throw new CustomError("Marks awared cannot be negative",400);
-    }
-
-    const answer=await prisma.answer.findFirst({
-      where:{
-        id:answerId,
-        session:{
-          quiz:{
-            categoryId:teacherId
-          }
-        }
-      },
-      include:{
-        question:true,
-        session:{
-          include:{
-            quiz:true
-          }
-        }
+      if (!teacherId) {
+        throw new CustomError("User not authenticated", 401);
       }
-    })
+      if (req.user?.role !== "TEACEHER") {
+        throw new CustomError("Only teacher can grade ansers", 403);
+      }
 
-    if(!answer){
-      throw new CustomError("Answer not found or unauthorized", 404);
-    }
+      if (!answerId || marksAwarded === undefined) {
+        throw new CustomError("Try Again!", 400);
+      }
+      if (marksAwarded < 0) {
+        throw new CustomError("Marks awared cannot be negative", 400);
+      }
 
-    if (marksAwarded > answer.question.marks) {
-      throw new CustomError(`Marks awarded (${marksAwarded}) cannot exceed question maximum (${answer.question.marks})`, 400);
-    }
-
-    const result=await prisma.$transaction(async(tx)=>{
-      const updatedAnswer=await tx.answer.update({
-        where:{
-          id:answerId,
-        },
-        data:{
-          marksAwarded:marksAwarded,
-          isCorrect:isCorrect!==undefined?isCorrect:marksAwarded>0
-        }
-      })
-      const allAnswers=await tx.answer.findMany({
-        where:{
-          sessionId:answer.sessionId,
-        }
-      })
-      const newScore = allAnswers.reduce((sum, ans) => sum + (ans.marksAwarded || 0), 0);
-      const newCorrectCount = allAnswers.filter(ans => ans.isCorrect === true).length;
-      const newIncorrectCount = allAnswers.filter(ans => ans.isCorrect === false).length;
-      const totalMarks = answer.session.quiz.totalMarks;
-      const newPercentage = totalMarks > 0 ? (newScore / totalMarks) * 100 : 0;
-      const isPassed = newScore >= answer.session.quiz.passingMarks;
-
-        // Update the result
-      const updatedResult = await tx.result.update({
+      const answer = await prisma.answer.findFirst({
         where: {
-          sessionId: answer.sessionId
+          id: answerId,
+          session: {
+            quiz: {
+              categoryId: teacherId,
+            },
+          },
         },
-        data: {
-          score: newScore,
-          percentage: newPercentage,
-          questionsCorrect: newCorrectCount,
-          questionsIncorrect: newIncorrectCount,
-          isPassed: isPassed
-        }
+        include: {
+          question: true,
+          session: {
+            include: {
+              quiz: true,
+            },
+          },
+        },
       });
 
-      return { updatedAnswer, updatedResult };
-    })
+      if (!answer) {
+        throw new CustomError("Answer not found or unauthorized", 404);
+      }
 
-    return res.status(200).json(
-        new ApiResponse(200, {
-          answer: result.updatedAnswer,
-          updatedResult: {
-            score: result.updatedResult.score,
-            percentage: result.updatedResult.percentage,
-            isPassed: result.updatedResult.isPassed
-          }
-        }, "Answer graded successfully")
+      if (marksAwarded > answer.question.marks) {
+        throw new CustomError(
+          `Marks awarded (${marksAwarded}) cannot exceed question maximum (${answer.question.marks})`,
+          400
+        );
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const updatedAnswer = await tx.answer.update({
+          where: {
+            id: answerId,
+          },
+          data: {
+            marksAwarded: marksAwarded,
+            isCorrect: isCorrect !== undefined ? isCorrect : marksAwarded > 0,
+          },
+        });
+        const allAnswers = await tx.answer.findMany({
+          where: {
+            sessionId: answer.sessionId,
+          },
+        });
+        const newScore = allAnswers.reduce(
+          (sum, ans) => sum + (ans.marksAwarded || 0),
+          0
+        );
+        const newCorrectCount = allAnswers.filter(
+          (ans) => ans.isCorrect === true
+        ).length;
+        const newIncorrectCount = allAnswers.filter(
+          (ans) => ans.isCorrect === false
+        ).length;
+        const totalMarks = answer.session.quiz.totalMarks;
+        const newPercentage =
+          totalMarks > 0 ? (newScore / totalMarks) * 100 : 0;
+        const isPassed = newScore >= answer.session.quiz.passingMarks;
+
+        // Update the result
+        const updatedResult = await tx.result.update({
+          where: {
+            sessionId: answer.sessionId,
+          },
+          data: {
+            score: newScore,
+            percentage: newPercentage,
+            questionsCorrect: newCorrectCount,
+            questionsIncorrect: newIncorrectCount,
+            isPassed: isPassed,
+          },
+        });
+
+        return { updatedAnswer, updatedResult };
+      });
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            answer: result.updatedAnswer,
+            updatedResult: {
+              score: result.updatedResult.score,
+              percentage: result.updatedResult.percentage,
+              isPassed: result.updatedResult.isPassed,
+            },
+          },
+          "Answer graded successfully"
+        )
       );
-
-  } catch (error) {
-    next(error)
+    } catch (error) {
+      next(error);
+    }
   }
-})
+);
 
 // bulk grading
 
-export const bulkGradeANswerController=asyncHandler(async(req:AuthenticatedRequestformanualeval,res:Response,next:NextFunction)=>{
-  try {
-    const teacherId=req.user?.id
+export const bulkGradeANswerController = asyncHandler(
+  async (
+    req: AuthenticatedRequestformanualeval,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const teacherId = req.user?.id;
 
-    const { resultId,gradings }: BulkManualGradingRequest = req.body;
+      const { resultId, gradings }: BulkManualGradingRequest = req.body;
 
-    if(!teacherId){
-      throw new CustomError("User not authenticated", 401);
-    }
-    if(req.user?.role!=="TEACEHER"){
-      throw new CustomError("Only teacher can grade ansers",403)
-    }
-    if (!resultId || !gradings || !Array.isArray(gradings) || gradings.length === 0) {
-      throw new CustomError("Result ID and gradings array are required", 400);
-    }
-
-    for (let i = 0; i < gradings.length; i++) {
-      const grading = gradings[i];
-      if (!grading.answerId || grading.marksAwarded === undefined) {
-        throw new CustomError(`Grading ${i + 1}: Answer ID and marks awarded are required`, 400);
+      if (!teacherId) {
+        throw new CustomError("User not authenticated", 401);
       }
-      if (grading.marksAwarded < 0) {
-        throw new CustomError(`Grading ${i + 1}: Marks awarded cannot be negative`, 400);
+      if (req.user?.role !== "TEACEHER") {
+        throw new CustomError("Only teacher can grade ansers", 403);
       }
-    }
-    const result = await prisma.result.findFirst({
-      where: {
-        id: resultId,
-        quiz: {
-          createdById: teacherId
-        }
-      },
-      include: {
-        quiz: true
+      if (
+        !resultId ||
+        !gradings ||
+        !Array.isArray(gradings) ||
+        gradings.length === 0
+      ) {
+        throw new CustomError("Result ID and gradings array are required", 400);
       }
-    });
 
-    if (!result) {
-      throw new CustomError("Result not found or unauthorized", 404);
-    }
-
-    const updateResult=await prisma.$transaction(async(tx)=>{
-      const updatedAnswers=[];
-      for(const grading of gradings){
-        const answer=await tx.answer.findFirst({
-          where:{
-            id:grading.answerId,
-            sessionId:result.sessionId!
-          },
-          include:{
-            question:true
-          }
-        })
-        if(!answer){
-          throw new CustomError(`Answer ${grading.answerId} not found`, 404);
-        }
-
-        if(grading.marksAwarded>answer.question.marks){
+      for (let i = 0; i < gradings.length; i++) {
+        const grading = gradings[i];
+        if (!grading.answerId || grading.marksAwarded === undefined) {
           throw new CustomError(
+            `Grading ${i + 1}: Answer ID and marks awarded are required`,
+            400
+          );
+        }
+        if (grading.marksAwarded < 0) {
+          throw new CustomError(
+            `Grading ${i + 1}: Marks awarded cannot be negative`,
+            400
+          );
+        }
+      }
+      const result = await prisma.result.findFirst({
+        where: {
+          id: resultId,
+          quiz: {
+            createdById: teacherId,
+          },
+        },
+        include: {
+          quiz: true,
+        },
+      });
+
+      if (!result) {
+        throw new CustomError("Result not found or unauthorized", 404);
+      }
+
+      const updateResult = await prisma.$transaction(async (tx) => {
+        const updatedAnswers = [];
+        for (const grading of gradings) {
+          const answer = await tx.answer.findFirst({
+            where: {
+              id: grading.answerId,
+              sessionId: result.sessionId!,
+            },
+            include: {
+              question: true,
+            },
+          });
+          if (!answer) {
+            throw new CustomError(`Answer ${grading.answerId} not found`, 404);
+          }
+
+          if (grading.marksAwarded > answer.question.marks) {
+            throw new CustomError(
               `Answer ${grading.answerId}: Marks awarded (${grading.marksAwarded}) cannot exceed question maximum (${answer.question.marks})`,
               400
             );
-        }
+          }
 
-        const updatedAnswer=await tx.answer.update({
-          where:{
-            id:grading.answerId
-          },
-          data:{
-            marksAwarded:grading.marksAwarded,
-            isCorrect:grading.isCorrect !==undefined ?grading.isCorrect:grading.marksAwarded>0
-          }
-        })
-        updatedAnswers.push(updatedAnswer)
-      }
-       const allAnswers = await tx.answer.findMany({
+          const updatedAnswer = await tx.answer.update({
+            where: {
+              id: grading.answerId,
+            },
+            data: {
+              marksAwarded: grading.marksAwarded,
+              isCorrect:
+                grading.isCorrect !== undefined
+                  ? grading.isCorrect
+                  : grading.marksAwarded > 0,
+            },
+          });
+          updatedAnswers.push(updatedAnswer);
+        }
+        const allAnswers = await tx.answer.findMany({
           where: {
-            sessionId: result.sessionId!
-          }
+            sessionId: result.sessionId!,
+          },
         });
 
-        const newScore = allAnswers.reduce((sum, ans) => sum + (ans.marksAwarded || 0), 0);
-        const newCorrectCount = allAnswers.filter(ans => ans.isCorrect === true).length;
-        const newIncorrectCount = allAnswers.filter(ans => ans.isCorrect === false).length;
+        const newScore = allAnswers.reduce(
+          (sum, ans) => sum + (ans.marksAwarded || 0),
+          0
+        );
+        const newCorrectCount = allAnswers.filter(
+          (ans) => ans.isCorrect === true
+        ).length;
+        const newIncorrectCount = allAnswers.filter(
+          (ans) => ans.isCorrect === false
+        ).length;
         const totalMarks = result.quiz.totalMarks;
-        const newPercentage = totalMarks > 0 ? (newScore / totalMarks) * 100 : 0;
+        const newPercentage =
+          totalMarks > 0 ? (newScore / totalMarks) * 100 : 0;
         const isPassed = newScore >= result.quiz.passingMarks;
 
         // Update the result
@@ -1229,64 +1364,77 @@ export const bulkGradeANswerController=asyncHandler(async(req:AuthenticatedReque
             percentage: newPercentage,
             questionsCorrect: newCorrectCount,
             questionsIncorrect: newIncorrectCount,
-            isPassed: isPassed
-          }
+            isPassed: isPassed,
+          },
         });
 
         return { updatedAnswers, finalResult };
-    })
+      });
 
-     return res.status(200).json(
-        new ApiResponse(200, {
-          gradedAnswers: updatedResult.updatedAnswers.length,
-          updatedResult: {
-            score: updatedResult.finalResult.score,
-            percentage: updatedResult.finalResult.percentage,
-            isPassed: updatedResult.finalResult.isPassed
-          }
-        }, `Successfully graded ${updatedResult.updatedAnswers.length} answers`)
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            gradedAnswers: updatedResult.updatedAnswers.length,
+            updatedResult: {
+              score: updatedResult.finalResult.score,
+              percentage: updatedResult.finalResult.percentage,
+              isPassed: updatedResult.finalResult.isPassed,
+            },
+          },
+          `Successfully graded ${updatedResult.updatedAnswers.length} answers`
+        )
       );
-  } catch (error) {
-    next(error)
+    } catch (error) {
+      next(error);
+    }
   }
-})
+);
 
-export const gradingStatsController=asyncHandler(async(req:AuthenticatedRequestformanualeval,res:Response,next:NextFunction)=>{
-  try {
-    const teacherId=req.user?.id
+export const gradingStatsController = asyncHandler(
+  async (
+    req: AuthenticatedRequestformanualeval,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const teacherId = req.user?.id;
 
-    if(!teacherId){
-      throw new CustomError("User not authenticated",401)
-    }
-    if(req.user?.role!=="TEACHER"){
-      throw new CustomError("Only teachers can access grading statistics", 403);
-    }
-    const stats=await prisma.result.findMany({
-      where:{
-        quiz:{
-          createdById:teacherId,
-        }
-      },
-      include:{
-        quiz:{
-          select:{
-            id:true,
-            title:true,
-          }
-        },
-        sessions:{
-          include:{
-            answers:{
-              select:{
-                isCorrect:true
-              }
-            }
-          }
-        }
+      if (!teacherId) {
+        throw new CustomError("User not authenticated", 401);
       }
-    })
+      if (req.user?.role !== "TEACHER") {
+        throw new CustomError(
+          "Only teachers can access grading statistics",
+          403
+        );
+      }
+      const stats = await prisma.result.findMany({
+        where: {
+          quiz: {
+            createdById: teacherId,
+          },
+        },
+        include: {
+          quiz: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          sessions: {
+            include: {
+              answers: {
+                select: {
+                  isCorrect: true,
+                },
+              },
+            },
+          },
+        },
+      });
 
-    let totalSubmissions = stats.length;
+      let totalSubmissions = stats.length;
       let pendingGrading = 0;
       let fullyGraded = 0;
       let partiallyGraded = 0;
@@ -1298,7 +1446,9 @@ export const gradingStatsController=asyncHandler(async(req:AuthenticatedRequestf
         if (!session) continue;
 
         const answers = session.answers;
-        const pendingAnswers = answers.filter(a => a.isCorrect === null).length;
+        const pendingAnswers = answers.filter(
+          (a) => a.isCorrect === null
+        ).length;
         const totalAnswers = answers.length;
 
         if (pendingAnswers === 0) {
@@ -1317,7 +1467,7 @@ export const gradingStatsController=asyncHandler(async(req:AuthenticatedRequestf
             totalSubmissions: 0,
             pendingGrading: 0,
             fullyGraded: 0,
-            partiallyGraded: 0
+            partiallyGraded: 0,
           };
         }
 
@@ -1332,21 +1482,29 @@ export const gradingStatsController=asyncHandler(async(req:AuthenticatedRequestf
       }
 
       return res.status(200).json(
-        new ApiResponse(200, {
-          overallStats: {
-            totalSubmissions,
-            pendingGrading,
-            fullyGraded,
-            partiallyGraded,
-            gradingProgress: totalSubmissions > 0 ? (fullyGraded / totalSubmissions) * 100 : 0
+        new ApiResponse(
+          200,
+          {
+            overallStats: {
+              totalSubmissions,
+              pendingGrading,
+              fullyGraded,
+              partiallyGraded,
+              gradingProgress:
+                totalSubmissions > 0
+                  ? (fullyGraded / totalSubmissions) * 100
+                  : 0,
+            },
+            quizStats: Object.values(quizStats),
           },
-          quizStats: Object.values(quizStats)
-        }, "Grading statistics retrieved successfully")
+          "Grading statistics retrieved successfully"
+        )
       );
-  } catch (error) {
-    next(error)
+    } catch (error) {
+      next(error);
+    }
   }
-})
+);
 
 export const getQuizReportController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -1360,24 +1518,24 @@ export const getQuizReportController = asyncHandler(
       const result = await prisma.result.findFirst({
         where: {
           quizId: quizId as string,
-          studentId: studentId as string
+          studentId: studentId as string,
         },
-        orderBy: { submittedAt: 'desc' },
+        orderBy: { submittedAt: "desc" },
         include: {
           quiz: {
             include: {
               questions: {
                 include: { options: true },
-                orderBy: { order: 'asc' }
-              }
-            }
+                orderBy: { order: "asc" },
+              },
+            },
           },
           student: {
             select: {
               id: true,
               name: true,
-              email: true
-            }
+              email: true,
+            },
           },
           session: {
             include: {
@@ -1385,13 +1543,13 @@ export const getQuizReportController = asyncHandler(
                 include: {
                   option: true,
                   question: {
-                    include: { options: true }
-                  }
-                }
-              }
-            }
-          }
-        }
+                    include: { options: true },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
 
       if (!result || !result.session) {
@@ -1405,7 +1563,7 @@ export const getQuizReportController = asyncHandler(
 
       const report = result.quiz.questions.map((question) => {
         const answer = answerMap.get(question.id);
-        const correctOption = question.options.find(opt => opt.isCorrect);
+        const correctOption = question.options.find((opt) => opt.isCorrect);
 
         if (!answer) {
           // Skipped question
@@ -1420,7 +1578,7 @@ export const getQuizReportController = asyncHandler(
             isCorrect: false,
             skipped: true,
             marksAwarded: 0,
-            explanation: question.explanation || null
+            explanation: question.explanation || null,
           };
         }
 
@@ -1435,69 +1593,79 @@ export const getQuizReportController = asyncHandler(
           isCorrect: answer.isCorrect,
           skipped: false,
           marksAwarded: answer.marksAwarded,
-          explanation: question.explanation || null
+          explanation: question.explanation || null,
         };
       });
 
       return res.status(200).json(
-        new ApiResponse(200, {
-          student: result.student,
-          quiz: {
-            id: result.quiz.id,
-            title: result.quiz.title,
-            totalMarks: result.totalMarks,
-            score: result.score,
-            percentage: result.percentage,
-            timeTaken: result.timeTaken,
-            questionsAttempted: result.questionsAttempted,
-            questionsCorrect: result.questionsCorrect,
-            questionsIncorrect: result.questionsIncorrect,
-            questionsSkipped: result.questionsSkipped,
-            isPassed: result.isPassed,
-            submittedAt: result.submittedAt
+        new ApiResponse(
+          200,
+          {
+            student: result.student,
+            quiz: {
+              id: result.quiz.id,
+              title: result.quiz.title,
+              totalMarks: result.totalMarks,
+              score: result.score,
+              percentage: result.percentage,
+              timeTaken: result.timeTaken,
+              questionsAttempted: result.questionsAttempted,
+              questionsCorrect: result.questionsCorrect,
+              questionsIncorrect: result.questionsIncorrect,
+              questionsSkipped: result.questionsSkipped,
+              isPassed: result.isPassed,
+              submittedAt: result.submittedAt,
+            },
+            report,
           },
-          report
-        }, "Quiz report generated successfully")
+          "Quiz report generated successfully"
+        )
       );
-
     } catch (error) {
       next(error);
     }
   }
 );
 
-
 export const getAllAttempetedQuizController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req?.user.id;
 
-       const attemptedQuizzes = await prisma.result.findMany({
+      const attemptedQuizzes = await prisma.result.findMany({
         where: {
           studentId: userId,
         },
-        include:{
-            quiz:{
-                select:{
-                    id: true,
-                    title: true,
-                    description: true,
-                    createdBy: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                        },
-                    },
-                }
-            }
-        }
+        include: {
+          quiz: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              createdBy: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
       });
 
       if (!attemptedQuizzes || attemptedQuizzes.length === 0) {
         throw CustomError("No attempted quizzes found for this user", 400);
       }
-      return res.status(200).json(new ApiResponse(200,attemptedQuizzes"Attempted quizzes fetched successfully"));
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            attemptedQuizzes,
+            "Attempted quizzes fetched successfully"
+          )
+        );
     } catch (error) {
       next(error);
     }
@@ -1505,67 +1673,77 @@ export const getAllAttempetedQuizController = asyncHandler(
 );
 
 //  for admin or teacher
-export const getStudentsWhoAttemptedQuizController = asyncHandler(async(req:Request, res:Response, next:NextFunction) => {
+export const getStudentsWhoAttemptedQuizController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const quizId = req.params.id;
+      const quizId = req.params.id;
 
-        const userId= req?.user.id;
+      const userId = req?.user.id;
 
-        const user=await prisma.user.findUnique({
-            where: {
-                id: userId,
-            },
+      const user = await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          role: true,
+        },
+      });
+      if (user?.role !== "ADMIN" && user?.role !== "TEACHER") {
+        throw CustomError("You are not authorized to view this data", 403);
+      }
+
+      const isQUiz = await prisma.quiz.findUnique({
+        where: {
+          id: quizId,
+        },
+      });
+      if (!isQUiz) {
+        throw CustomError("Quiz not found", 404);
+      }
+
+      const studentList = await prisma.result.findMany({
+        where: {
+          quizId: quizId,
+        },
+        select: {
+          student: {
             select: {
-                role: true,
+              id: true,
+              name: true,
+              email: true,
             },
-        });
-        if (user?.role !== "ADMIN" && user?.role !== "TEACHER") {
-            throw CustomError("You are not authorized to view this data", 403);
-        }
-
-        const isQUiz=await prisma.quiz.findUnique({
-            where: {
-                id: quizId,
-            },
-        })
-        if (!isQUiz) {
-            throw CustomError("Quiz not found", 404);
-        }
-
-        const studentList=await prisma.result.findMany({
-            where:{
-                quizId: quizId,
-            },
-            select:{
-                student: {
-                    select: {
-                        id: true,
-                        name: true,
-                        email: true,
-                    },
-                },
-                // quiz:{
-                //     select: {
-                //         id: true,
-                //         title: true,
-                //         createdBy:{
-                //             select:{
-                //                 id: true,
-                //                 name: true,
-                //                 email: true,
-                //             }
-                //         }
-                //     }
-                // },
-                score: true,
-                createdAt: true,
-            }
-        })
-        if (!studentList || studentList.length === 0) {
-            throw CustomError("No students have attempted this quiz", 404);
-        }
-        return res.status(200).json(new ApiResponse(200,studentList,"Students who attempted the quiz fetched successfully"));
+          },
+          // quiz:{
+          //     select: {
+          //         id: true,
+          //         title: true,
+          //         createdBy:{
+          //             select:{
+          //                 id: true,
+          //                 name: true,
+          //                 email: true,
+          //             }
+          //         }
+          //     }
+          // },
+          score: true,
+          createdAt: true,
+        },
+      });
+      if (!studentList || studentList.length === 0) {
+        throw CustomError("No students have attempted this quiz", 404);
+      }
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            studentList,
+            "Students who attempted the quiz fetched successfully"
+          )
+        );
     } catch (error) {
-        next(error);
+      next(error);
     }
-})
+  }
+);

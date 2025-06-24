@@ -56,6 +56,7 @@ model User {
   studentProfile StudentProfile? @relation("StudentUser")
   parentProfile  ParentProfile?  @relation("ParentUser")
   teacherProfile TeacherProfile? @relation("TeacherUser")
+  adminProfile   AdminProfile?   @relation("AdminUser")
 
   children       StudentProfile[] @relation("ParentRelation")
   quizzes        Quiz[]        @relation("TeacherQuizzes")
@@ -98,6 +99,15 @@ model TeacherProfile {
   user        User   @relation("TeacherUser", fields: [userId], references: [id], onDelete: Cascade)
 
   assignedQuizzes QuizAssignment[]
+}
+
+model  AdminProfile{
+  id     String @id @default(uuid())
+  userId String @unique
+  phone  String?
+  isVerified Boolean @default(false)
+
+  user   User   @relation("AdminUser", fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Category {

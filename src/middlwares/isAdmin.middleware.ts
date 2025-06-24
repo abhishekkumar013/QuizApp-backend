@@ -19,6 +19,21 @@ export const isAdmin = asyncHandler(
       if (!userrole || userrole !== "ADMIN" || getrole?.role !== "ADMIN") {
         throw new CustomError("Unauthorized", 403);
       }
+      const roleId = req.user?.roleId;
+      if (!roleId) {
+        throw new CustomError("Role ID not found", 400);
+      }
+      const isVerified = await prisma.adminProfile.findFirst({
+        where: {
+          id: roleId,
+        },
+        select: {
+          isVerified: true,
+        },
+      });
+      if (!isVerified) {
+        throw new CustomError("Admin profile not found", 404);
+      }
       next();
     } catch (error) {
       next(error);

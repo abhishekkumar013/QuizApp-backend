@@ -15,3 +15,5 @@ router.use(isAuthenticated);
 router.route("/rank").get(getAllStudentRankController);
 router.route("/").get(getAllResultController);
 router.route("/:id").get(getResultByIdController);
+
+export default router;

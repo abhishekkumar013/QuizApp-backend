@@ -31,6 +31,7 @@ export const isAuthenticated = asyncHandler(
         throw new CustomError("Unauthorized", 404);
       }
       req.user = user;
+      req.user.roleId = dcodedToken.roleId;
       next();
     } catch (error) {
       next(error);

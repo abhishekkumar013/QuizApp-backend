@@ -36,9 +36,7 @@ router.route("/start/:quizId").post(startQuizController);
 
 router.route("/submit").post(submitQuizController);
 
-router
-  .route("/report?quizId=QUIZ_ID&studentId=STUDENT_ID")
-  .get(getQuizReportController);
+router.route("/report").get(getQuizReportController);
 
 router.route("/attempted").get(getAllAttempetedQuizController);
 
@@ -55,3 +53,5 @@ router.use(isAdmin);
 router
   .route("/attmpted-student/:quizId")
   .get(getStudentsWhoAttemptedQuizController);
+
+export default router;

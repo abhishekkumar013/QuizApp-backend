@@ -88,30 +88,36 @@ export const getResultByIdController = asyncHandler(
         throw new CustomError("Result not found", 404);
       }
 
-      const rankfinder=await prisma.result.findMany({
-        where:{
-          quizId: id
+      const rankfinder = await prisma.result.findMany({
+        where: {
+          quizId: id,
         },
-        orderBy:{
-          score:"desc"
+        orderBy: {
+          score: "desc",
         },
-        select:{
-          studentId:true,
-          score:true
-        }
-      })
+        select: {
+          studentId: true,
+          score: true,
+        },
+      });
 
-      const studentrank=rankfinder.findIndex((s)=>s.studentId===studentId)+1;
+      const studentrank =
+        rankfinder.findIndex((s) => s.studentId === studentId) + 1;
 
       res
         .status(200)
-        .json(new ApiResponse(200, {...result ,  rank:studentrank}, "Result retrieved successfully"));
+        .json(
+          new ApiResponse(
+            200,
+            { ...result, rank: studentrank },
+            "Result retrieved successfully"
+          )
+        );
     } catch (error) {
       next(error);
     }
   }
 );
-
 
 // rank for a particular quiz
 export const getAllStudentRankController = asyncHandler(
@@ -163,7 +169,11 @@ export const getAllStudentRankController = asyncHandler(
       return res
         .status(200)
         .json(
-          new ApiResponse(200, results:rankedResults, "Quiz ranks retrieved successfully")
+          new ApiResponse(
+            200,
+            { results: rankedResults },
+            "Quiz ranks retrieved successfully"
+          )
         );
     } catch (error) {
       next(error);
