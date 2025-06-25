@@ -71,15 +71,15 @@ io.on("connection", (socket) => {
         return;
       }
 
-      const isOption = question?.options.find((opt) => opt.id === optionId);
-      if (!isOption) {
+      const selectedOption = question?.options.find(
+        (opt) => opt.id === optionId
+      );
+      if (!selectedOption) {
         socket.emit("error", { message: "Invalid option selected" });
         return;
       }
 
-      const isCorrect = question?.options.find(
-        (opt) => opt.id === optionId
-      )?.isCorrect;
+      const isCorrect = selectedOption.isCorrect;
 
       const answer = await prisma.answer.upsert({
         where: {
