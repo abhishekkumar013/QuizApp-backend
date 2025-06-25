@@ -1,7 +1,8 @@
 import asyncHandler from "../Lib/asynchHandler";
 import { Request, Response, NextFunction } from "express";
 import { CustomError } from "../Lib/error.handler";
-import prisma from "../Lib/prisma";
+// import prisma from "../Lib/prisma";
+import { prisma } from "../index";
 import { comparePassword, hashPassword } from "../Lib/hash.bcrypt";
 import { generateToken } from "../Lib/jwt";
 import { ApiResponse } from "../Lib/apiResponse";

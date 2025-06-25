@@ -1,7 +1,8 @@
 import asyncHandler from "../Lib/asynchHandler";
 import { Request, Response, NextFunction } from "express";
 import { CustomError } from "../Lib/error.handler";
-import prisma from "../Lib/prisma";
+// import prisma from "../Lib/prisma";
+import { prisma } from "../index";
 import { ApiResponse } from "../Lib/apiResponse";
 import { json } from "stream/consumers";
 import { equal } from "assert";
@@ -110,9 +111,7 @@ export const createQuizController = asyncHandler(
         !endTime ||
         !categoryId ||
         !durationInMinutes ||
-        !totalMarks ||
         !maxAttempts ||
-        !status ||
         !difficulty
       ) {
         throw new CustomError("All fields are required", 400);

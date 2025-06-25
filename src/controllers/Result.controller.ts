@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import asyncHandler from "../Lib/asynchHandler";
-import prisma from "../Lib/prisma";
+// import prisma from "../Lib/prisma";
+import { prisma } from "../index";
 import { CustomError } from "../Lib/error.handler";
 import { ApiResponse } from "../Lib/apiResponse";
 
