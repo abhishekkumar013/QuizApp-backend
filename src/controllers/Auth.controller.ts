@@ -408,26 +408,65 @@ export const SearchUsersController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const searchParams = req.params.search;
-      const { role, limit = 10, page = 1 } = req.query;
+      const { limit = 10, page = 1 } = req.query;
 
       const users = await prisma.user.findMany({
         where: {
-          OR: [
-            { name: { contains: searchParams, mode: "insensitive" } },
-            { email: { contains: searchParams, mode: "insensitive" } },
+          AND: [
+            {
+              OR: [
+                { name: { contains: searchParams, mode: "insensitive" } },
+                { email: { contains: searchParams, mode: "insensitive" } },
+              ],
+            },
+            {
+              role: {
+                not: "ADMIN",
+              },
+            },
           ],
         },
         skip: (Number(page) - 1) * Number(limit),
         take: Number(limit),
       });
 
-      if (!users) {
+      if (!users || users.length === 0) {
         throw new CustomError("No User found", 404);
       }
 
+      const groupedUsers = users.reduce((acc: any[], user) => {
+        const existingUser = acc.find((u) => u.email === user.email);
+
+        if (existingUser) {
+          // If user with same email exists, add role to array if not already present
+          if (!existingUser.role.includes(user.role)) {
+            existingUser.role.push(user.role);
+          }
+        } else {
+          // Create new user entry with role as array
+          acc.push({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: [user.role],
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          });
+        }
+
+        return acc;
+      }, []);
+
+      //--------------- Convert single-role arrays back to strings for consistency-------------------------
+
+      // const processedUsers = groupedUsers.map((user) => ({
+      //   ...user,
+      //   role: user.role.length === 1 ? user.role[0] : user.role,
+      // }));
+
       return res
         .status(200)
-        .json(new ApiResponse(200, users, "users fetched successfully"));
+        .json(new ApiResponse(200, groupedUsers, "users fetched successfully"));
     } catch (error) {
       next(error);
     }
@@ -518,7 +557,7 @@ export const updateStudentParentController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const studentUserId = req.params.id;
-      const { newParentId } = req.body;
+      const { newParentId, email } = req.body;
 
       const studentProfile = await prisma.studentProfile.findUnique({
         where: { userId: studentUserId },
@@ -528,17 +567,26 @@ export const updateStudentParentController = asyncHandler(
         throw new CustomError("Student profile not found", 404);
       }
 
-      const parentUser = await prisma.user.findUnique({
-        where: { id: newParentId },
+      const parentUser = await prisma.parentProfile.findUnique({
+        where: {
+          OR: [
+            { id: newParentId },
+            {
+              user: {
+                email: email,
+              },
+            },
+          ],
+        },
       });
 
-      if (!parentUser || parentUser.role !== "PARENT") {
+      if (!parentUser) {
         throw new CustomError("Invalid parent user ID", 400);
       }
 
       const updatedProfile = await prisma.studentProfile.update({
         where: { userId: studentUserId },
-        data: { parentId: newParentId },
+        data: { parentId: parentUser.id },
       });
 
       res
@@ -614,11 +662,11 @@ export const addChildToParentController = asyncHandler(
       const parentUserId = req.params.id; // Parent's user ID
       const { childUserId } = req.body; // Student's user ID
 
-      const parentUser = await prisma.user.findUnique({
+      const parentUser = await prisma.parentProfile.findUnique({
         where: { id: parentUserId },
       });
 
-      if (!parentUser || parentUser.role !== "PARENT") {
+      if (!parentUser) {
         throw new CustomError("Invalid parent ID", 400);
       }
 
@@ -632,7 +680,7 @@ export const addChildToParentController = asyncHandler(
 
       const updatedStudentProfile = await prisma.studentProfile.update({
         where: { userId: childUserId },
-        data: { parentId: parentUserId },
+        data: { parentId: parentUser.id },
       });
 
       res
@@ -1029,6 +1077,79 @@ export const verifyAdminController = asyncHandler(
       res
         .status(200)
         .json(new ApiResponse(200, user, "Admin verified successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// controller for teacher and student
+
+// get exact serch for user
+export const getExactSearchForUserController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const email = req.query.email as string;
+
+      if (!search) {
+        throw new CustomError("Search term is required", 400);
+      }
+      const user = await prisma.studentProfile.findFirst({
+        where: {
+          user: {
+            email: {
+              contains: email,
+              mode: "insensitive",
+            },
+          },
+        },
+        select: {
+          id: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// get exact search for teacher
+export const getExactSearchForTeacherController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const email = req.query.email as string;
+
+      if (!search) {
+        throw new CustomError("Search term is required", 400);
+      }
+      const user = await prisma.teacherProfile.findFirst({
+        where: {
+          user: {
+            email: {
+              contains: email,
+              mode: "insensitive",
+            },
+          },
+        },
+        select: {
+          id: true,
+          experienceYears: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
     } catch (error) {
       next(error);
     }
