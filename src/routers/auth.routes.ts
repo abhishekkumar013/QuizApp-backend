@@ -39,7 +39,7 @@ router.route("/search/student").get(getExactSearchForUserController);
 router.route("/search/teacher").get(getExactSearchForTeacherController);
 
 // Student routes
-router.route("/students/:id/parent").put(updateStudentParentController);
+router.route("/add-parent").put(updateStudentParentController);
 
 router.use(isAdmin);
 // Parent routes

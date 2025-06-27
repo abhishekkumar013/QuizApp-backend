@@ -60,7 +60,6 @@ model User {
 
   children       StudentProfile[] @relation("ParentRelation")
   quizzes        Quiz[]        @relation("TeacherQuizzes")
-  results        Result[]
   sessions       QuizSession[]
 
   createdAt DateTime @default(now())
@@ -79,6 +78,7 @@ model StudentProfile {
 
   assignedQuizzes QuizAssignment[]
   quizSessions   QuizSession[]
+  results        Result[]
 }
 
 model ParentProfile {
@@ -206,6 +206,7 @@ model QuizSession {
   timeSpent   Int         @default(0)
   
   answers     Answer[]
+  result      Result? 
 }
 
 model Answer{
@@ -228,12 +229,13 @@ model Answer{
 
 model Result {
   id                  String   @id @default(uuid())
-  student             User     @relation(fields: [studentId], references: [id])
+  student             StudentProfile     @relation(fields: [studentId], references: [id])
   studentId           String
   quiz                Quiz     @relation(fields: [quizId], references: [id])
   quizId              String
-  sessionId           String?
-  
+  sessionId           String  @unique
+  session             QuizSession @relation(fields: [sessionId], references: [id])
+
   score               Int
   totalMarks          Int
   percentage          Float

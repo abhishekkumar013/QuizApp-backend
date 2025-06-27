@@ -454,6 +454,7 @@ export const getQuizByIdController = asyncHandler(
           description: true,
           instructions: true,
           totalMarks: true,
+          accessType: true,
           maxAttempts: true,
           durationInMinutes: true,
           startTime: true,
@@ -486,9 +487,10 @@ export const getQuizByIdController = asyncHandler(
       const isAssigned = await prisma.quizAssignment.findFirst({
         where: {
           quizId: id,
-          studentId: req.user?.id, // Assuming user ID is stored in req.user
+          studentId: req.user?.roleId, // Assuming user ID is stored in req.user
         },
       });
+
       if (!isAssigned && quiz.accessType !== "PUBLIC") {
         throw new CustomError("You are not authorized to view this quiz", 403);
       }
@@ -1508,7 +1510,8 @@ export const gradingStatsController = asyncHandler(
 export const getQuizReportController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { quizId, studentId } = req.query;
+      const { quizId } = req.query;
+      const studentId = req.user?.roleId;
 
       if (!quizId || !studentId) {
         throw new CustomError("quizId and studentId are required", 400);
@@ -1532,8 +1535,13 @@ export const getQuizReportController = asyncHandler(
           student: {
             select: {
               id: true,
-              name: true,
-              email: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
             },
           },
           session: {

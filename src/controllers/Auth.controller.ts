@@ -224,6 +224,7 @@ export const SignInController = asyncHandler(
               name: isUser.name,
               role: isUser.role,
               token: token,
+              roleId: roleId,
             },
             "login successfully"
           )
@@ -556,18 +557,18 @@ export const resetPasswordController = asyncHandler(
 export const updateStudentParentController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const studentUserId = req.params.id;
+      const studentUserId = req.user?.roleId;
       const { newParentId, email } = req.body;
 
-      const studentProfile = await prisma.studentProfile.findUnique({
-        where: { userId: studentUserId },
+      const studentProfile = await prisma.studentProfile.findFirst({
+        where: { id: studentUserId },
       });
 
       if (!studentProfile) {
         throw new CustomError("Student profile not found", 404);
       }
 
-      const parentUser = await prisma.parentProfile.findUnique({
+      const parentUser = await prisma.parentProfile.findFirst({
         where: {
           OR: [
             { id: newParentId },
@@ -583,10 +584,15 @@ export const updateStudentParentController = asyncHandler(
       if (!parentUser) {
         throw new CustomError("Invalid parent user ID", 400);
       }
+      // console.log(parentUser);
 
       const updatedProfile = await prisma.studentProfile.update({
-        where: { userId: studentUserId },
-        data: { parentId: parentUser.id },
+        where: {
+          id: studentUserId,
+        },
+        data: {
+          parentId: parentUser.userId,
+        },
       });
 
       res
