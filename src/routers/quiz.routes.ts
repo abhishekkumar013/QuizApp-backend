@@ -8,6 +8,7 @@ import {
   createQuizController,
   deleteQuizController,
   getAllAttempetedQuizController,
+  getAllPublicQUizzesController,
   getAllQuizController,
   getPendingEvaluationsController,
   getQuizByCategoryController,
@@ -21,6 +22,8 @@ import {
 } from "../controllers/Quiz.controller";
 
 const router: Router = express.Router();
+
+router.route("/public").get(getAllPublicQUizzesController);
 
 router.use(isAuthenticated);
 // router.use(isTeacher);

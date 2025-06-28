@@ -1754,3 +1754,34 @@ export const getStudentsWhoAttemptedQuizController = asyncHandler(
     }
   }
 );
+
+export const getAllPublicQUizzesController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const quizes = await prisma.quiz.findMany({
+        where: {
+          isPublic: true,
+        },
+        include: {
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+      if (!quizes || quizes.length === 0) {
+        throw new CustomError("No public quizzes found", 404);
+      }
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(200, quizes, "Public quizzes fetched successfully")
+        );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
