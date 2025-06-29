@@ -16,6 +16,7 @@ import {
   SignUpController,
   updateStudentParentController,
   updateUserController,
+  VerifyUserController,
 } from "../controllers/Auth.controller";
 import express, { Router } from "express";
 import { isAuthenticated } from "../middlwares/Auth.middleware";
@@ -28,6 +29,7 @@ router.route("/users/signin").post(SignInController);
 
 router.use(isAuthenticated);
 
+router.route("/user/isauthenticated").get(VerifyUserController);
 router.route("/users/signout").post(SignOutController);
 router.route("/users/search/:search").get(SearchUsersController);
 router.route("/users/:id").put(updateUserController);

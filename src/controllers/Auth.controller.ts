@@ -235,6 +235,24 @@ export const SignInController = asyncHandler(
   }
 );
 
+export const VerifyUserController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = req.user?.id;
+
+      if (!id) {
+        throw new CustomError("Login Please!", 400);
+      }
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, req.user, "User verified successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export const SignOutController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {

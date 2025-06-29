@@ -32,6 +32,7 @@ export const isAuthenticated = asyncHandler(
       }
       req.user = user;
       req.user.roleId = dcodedToken.roleId;
+      req.user.token = token;
       next();
     } catch (error) {
       next(error);
