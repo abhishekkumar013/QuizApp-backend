@@ -12,14 +12,21 @@ dotenv.config({
   path: "./.env",
 });
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+    methods: ["GET", "POST", " PUT", "DELETE", "PATCH"],
+  })
+);
 app.use(express.json());
 app.use(cookieParser());
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "http://localhost:3000",
+    credentials: true,
     methods: ["GET", "POST", " PUT", "DELETE", "PATCH"],
   },
 });
