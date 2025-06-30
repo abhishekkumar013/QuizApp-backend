@@ -14,6 +14,7 @@ import {
   SignInController,
   SignOutController,
   SignUpController,
+  switchUserRoleController,
   updateStudentParentController,
   updateUserController,
   VerifyUserController,
@@ -34,6 +35,7 @@ router.route("/users/signout").post(SignOutController);
 router.route("/users/search/:search").get(SearchUsersController);
 router.route("/users/:id").put(updateUserController);
 router.route("/users/reset-password").put(resetPasswordController);
+router.route("/users/switch-role").post(switchUserRoleController);
 
 router.route("/parents/:id/add-child").put(addChildToParentController);
 

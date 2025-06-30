@@ -211,8 +211,9 @@ export const SignInController = asyncHandler(
       res
         .cookie("token", token, {
           httpOnly: true,
-          //   secure: true, // use only on HTTPS
-          //   sameSite: "strict",
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
         })
         .status(200)
         .json(
@@ -360,37 +361,32 @@ export const switchUserRoleController = asyncHandler(
         throw new CustomError("User not found with the specified role", 404);
       }
 
-      const token = await generateToken({
-        id: user.id,
-        role: user.role,
-        email: user.email,
-      });
+      // const token = await generateToken({
+      //   id: user.id,
+      //   role: user.role,
+      //   email: user.email,
+      // });
 
-      res
-        .cookie("token", token, {
-          httpOnly: true,
-        })
-        .status(200)
-        .json(
-          new ApiResponse(
-            200,
-            {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              profile:
-                user.role === "STUDENT"
-                  ? user.studentProfile
-                  : user.role === "PARENT"
-                  ? user.parentProfile
-                  : user.role === "TEACHER"
-                  ? user.teacherProfile
-                  : null,
-            },
-            "User role switched successfully"
-          )
-        );
+      res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            profile:
+              user.role === "STUDENT"
+                ? user.studentProfile
+                : user.role === "PARENT"
+                ? user.parentProfile
+                : user.role === "TEACHER"
+                ? user.teacherProfile
+                : null,
+          },
+          "User role switched successfully"
+        )
+      );
     } catch (error) {
       next(error);
     }
