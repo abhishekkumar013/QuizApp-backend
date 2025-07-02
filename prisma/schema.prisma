@@ -97,6 +97,8 @@ model TeacherProfile {
 
   
   user        User   @relation("TeacherUser", fields: [userId], references: [id], onDelete: Cascade)
+    // quizzes     Quiz[]        @relation("TeacherQuizzes")
+
 
   assignedQuizzes QuizAssignment[]
 }
@@ -123,6 +125,8 @@ model Quiz {
   description String?
   instructions String?
   createdBy   User      @relation("TeacherQuizzes", fields: [createdById], references: [id])
+  // createdBy   TeacherProfile      @relation("TeacherQuizzes", fields: [createdById], references: [id])
+
   createdById String
   categoryId  String
   category    Category  @relation(fields: [categoryId], references: [id])

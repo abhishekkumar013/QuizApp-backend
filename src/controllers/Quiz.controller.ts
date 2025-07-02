@@ -347,6 +347,11 @@ export const getAllQuizController = asyncHandler(
         throw new CustomError("Unauthorized", 401);
       }
 
+      const role = req.user?.role;
+      if (role !== "STUDENT") {
+        throw new CustomError("Login With Student Id To See Al Quiz", 403);
+      }
+
       // Find the studentProfileId from userId
       const studentProfile = await prisma.studentProfile.findFirst({
         where: { userId },
@@ -364,7 +369,9 @@ export const getAllQuizController = asyncHandler(
         where: {
           accessType: "PUBLIC",
           status: "PUBLISHED",
-          endTime: { lte: new Date() },
+        },
+        orderBy: {
+          createdAt: "asc",
         },
         select: {
           id: true,
@@ -391,9 +398,9 @@ export const getAllQuizController = asyncHandler(
       const assignedQuizzes = await prisma.quizAssignment.findMany({
         where: {
           studentId: studentProfileId,
-          quiz: {
-            endTime: { lte: new Date() },
-          },
+        },
+        orderBy: {
+          assignedAt: "asc",
         },
         select: {
           quiz: {
@@ -430,6 +437,74 @@ export const getAllQuizController = asyncHandler(
             assignedQuizzes: assignedQuizList,
           },
           "Quizzes fetched successfully"
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+export const getAllOwnQuizFor_TeacherController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new CustomError("Unauthorized", 401);
+      }
+
+      const role = req.user?.role;
+      if (role !== "TEACHER") {
+        throw new CustomError(
+          "Login With Teacher Id To See All Your Quiz",
+          403
+        );
+      }
+
+      const quizSelectFields = {
+        id: true,
+        title: true,
+        description: true,
+        instructions: true,
+        status: true,
+        durationInMinutes: true,
+        difficulty: true,
+        totalMarks: true,
+        maxAttempts: true,
+        startTime: true,
+        endTime: true,
+        category: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+      };
+
+      const [publicQuizzes, privateQuizzes, protectedQuizzes] =
+        await Promise.all([
+          prisma.quiz.findMany({
+            where: { accessType: "PUBLIC", createdById: userId },
+            orderBy: { createdAt: "asc" },
+            select: quizSelectFields,
+          }),
+          prisma.quiz.findMany({
+            where: { accessType: "PRIVATE", createdById: userId },
+            orderBy: { createdAt: "asc" },
+            select: quizSelectFields,
+          }),
+          prisma.quiz.findMany({
+            where: { accessType: "PROTECTED", createdById: userId },
+            orderBy: { createdAt: "asc" },
+            select: quizSelectFields,
+          }),
+        ]);
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            publicQuizzes,
+            privateQuizzes,
+            protectedQuizzes,
+          },
+          "Teacher's quizzes fetched successfully"
         )
       );
     } catch (error) {
@@ -1760,9 +1835,18 @@ export const getAllPublicQUizzesController = asyncHandler(
     try {
       const quizes = await prisma.quiz.findMany({
         where: {
-          isPublic: true,
+          accessType: "PUBLIC",
+        },
+        orderBy: {
+          createdAt: "desc",
         },
         include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           createdBy: {
             select: {
               id: true,

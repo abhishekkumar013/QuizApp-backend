@@ -8,6 +8,7 @@ import {
   createQuizController,
   deleteQuizController,
   getAllAttempetedQuizController,
+  getAllOwnQuizFor_TeacherController,
   getAllPublicQUizzesController,
   getAllQuizController,
   getPendingEvaluationsController,
@@ -50,6 +51,7 @@ router.route("/pending-evaluation").get(getPendingEvaluationsController);
 router.route("/grade").post(gradeAnswerController);
 router.route("/bulk-grade").post(bulkGradeANswerController);
 router.route("/grade-statics").get(gradingStatsController);
+router.route("/own-quiz").get(getAllOwnQuizFor_TeacherController);
 
 router.use(isAdmin);
 
