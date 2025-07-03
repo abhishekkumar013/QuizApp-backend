@@ -11,10 +11,10 @@ import { isAdmin } from "../middlwares/isAdmin.middleware";
 const router: Router = express.Router();
 
 router.use(isAuthenticated);
+router.route("/all").get(getAllCategoryController);
 router.use(isAdmin);
 
 router.route("/create").post(createCategoryController);
-router.route("/all").get(getAllCategoryController);
 router.route("/delete/:id").delete(deleteCategoryController);
 router.route("/update/:id").put(updateCategoryCotroller);
 

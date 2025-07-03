@@ -6,6 +6,7 @@ import {
   addQuestionsToQuiz,
   bulkGradeANswerController,
   createQuizController,
+  createQuizWithQuestions,
   deleteQuizController,
   getAllAttempetedQuizController,
   getAllOwnQuizFor_TeacherController,
@@ -45,8 +46,9 @@ router.route("/report").get(getQuizReportController);
 router.route("/attempted").get(getAllAttempetedQuizController);
 
 router.use(isTeacher);
-router.route("/create/quiz").post(createQuizController);
+router.route("/create").post(createQuizController);
 router.route("/add/questions").post(addQuestionsToQuiz);
+router.route("/create-quiz-question").post(createQuizWithQuestions);
 router.route("/pending-evaluation").get(getPendingEvaluationsController);
 router.route("/grade").post(gradeAnswerController);
 router.route("/bulk-grade").post(bulkGradeANswerController);

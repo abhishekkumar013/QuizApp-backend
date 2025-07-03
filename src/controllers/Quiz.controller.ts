@@ -90,7 +90,6 @@ export const createQuizController = asyncHandler(
         title,
         description,
         instructions,
-        createdById,
         startTime,
         endTime,
         categoryId,
@@ -105,7 +104,6 @@ export const createQuizController = asyncHandler(
 
       if (
         !title ||
-        !createdById ||
         !accessType ||
         !startTime ||
         !endTime ||
@@ -115,6 +113,11 @@ export const createQuizController = asyncHandler(
         !difficulty
       ) {
         throw new CustomError("All fields are required", 400);
+      }
+      const createdById = req.user?.id;
+
+      if (!createdById) {
+        throw CustomError("UnAuthorized", 400);
       }
 
       const isCategoryId = await prisma.category.findUnique({
@@ -199,12 +202,13 @@ export const addQuestionsToQuiz = asyncHandler(
         if (
           !question.options ||
           !Array.isArray(question.options) ||
-          question.options.length === 0
+          question.options.length === 0 ||
+          question?.options.length < 2
         ) {
           throw new CustomError(
             `Question ${
               i + 1
-            }: options array is required and must not be empty`,
+            }: options array is required and must not be empty or less then 2`,
             400
           );
         }
@@ -337,6 +341,234 @@ export const addQuestionsToQuiz = asyncHandler(
   }
 );
 
+export const createQuizWithQuestions = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const {
+        // Quiz fields
+        title,
+        description,
+        instructions,
+        startTime,
+        endTime,
+        categoryId,
+        accessType,
+        status,
+        difficulty,
+        durationInMinutes,
+        totalMarks,
+        passingMarks,
+        maxAttempts,
+        // Questions field
+        questions,
+      } = req.body;
+
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new CustomError("User not authenticated", 401);
+      }
+
+      // Validate required quiz fields
+      if (
+        !title ||
+        !accessType ||
+        !startTime ||
+        !endTime ||
+        !categoryId ||
+        !durationInMinutes ||
+        !maxAttempts ||
+        !difficulty
+      ) {
+        throw new CustomError("All quiz fields are required", 400);
+      }
+
+      // Validate category exists
+      const isCategoryId = await prisma.category.findUnique({
+        where: {
+          id: categoryId,
+        },
+      });
+
+      if (!isCategoryId) {
+        throw new CustomError("Category not found", 404);
+      }
+
+      // Validate questions if provided
+      let validatedQuestions = [];
+      let calculatedTotalMarks = totalMarks || 0;
+
+      if (questions && Array.isArray(questions) && questions.length > 0) {
+        // Validate each question
+        for (let i = 0; i < questions.length; i++) {
+          const question = questions[i];
+
+          if (!question.text || question.text.trim() === "") {
+            throw new CustomError(`Question ${i + 1}: text is required`, 400);
+          }
+
+          if (typeof question.score !== "number" || question.score < 0) {
+            throw new CustomError(
+              `Question ${i + 1}: score must be a non-negative number`,
+              400
+            );
+          }
+
+          if (typeof question.order !== "number" || question.order < 0) {
+            throw new CustomError(
+              `Question ${i + 1}: order must be a non-negative number`,
+              400
+            );
+          }
+
+          if (
+            !question.options ||
+            !Array.isArray(question.options) ||
+            question.options.length < 2
+          ) {
+            throw new CustomError(
+              `Question ${
+                i + 1
+              }: options array is required and must have at least 2 options`,
+              400
+            );
+          }
+
+          // Validate options
+          let hasCorrectAnswer = false;
+          for (let j = 0; j < question.options.length; j++) {
+            const option = question.options[j];
+
+            if (!option.text || option.text.trim() === "") {
+              throw new CustomError(
+                `Question ${i + 1}, Option ${j + 1}: text is required`,
+                400
+              );
+            }
+
+            if (typeof option.isCorrect !== "boolean") {
+              throw new CustomError(
+                `Question ${i + 1}, Option ${
+                  j + 1
+                }: isCorrect must be a boolean`,
+                400
+              );
+            }
+
+            if (option.isCorrect) {
+              hasCorrectAnswer = true;
+            }
+          }
+
+          if (!hasCorrectAnswer) {
+            throw new CustomError(
+              `Question ${
+                i + 1
+              }: at least one option must be marked as correct`,
+              400
+            );
+          }
+
+          validatedQuestions.push(question);
+        }
+
+        // Calculate total marks from questions if not provided
+        if (!totalMarks) {
+          calculatedTotalMarks = questions.reduce(
+            (sum, q) => sum + (q.marks || 1),
+            0
+          );
+        }
+      }
+
+      // Create quiz and questions in a transaction
+      const result = await prisma.$transaction(async (tx) => {
+        // Create the quiz
+        const newQuiz = await tx.quiz.create({
+          data: {
+            title,
+            description,
+            instructions,
+            createdById: userId,
+            categoryId,
+            accessType,
+            status:
+              validatedQuestions.length > 0 ? "PUBLISHED" : status || "DRAFT",
+            difficulty,
+            durationInMinutes,
+            totalMarks: calculatedTotalMarks,
+            passingMarks,
+            maxAttempts,
+            startTime: new Date(startTime),
+            endTime: new Date(endTime),
+          },
+        });
+
+        // Create questions if provided
+        let createdQuestions = [];
+        if (validatedQuestions.length > 0) {
+          const questionPromises = validatedQuestions.map(
+            async (question, index) => {
+              const questionOrder = question.order || index + 1;
+
+              return await tx.question.create({
+                data: {
+                  text: question.text.trim(),
+                  score: question.score,
+                  explanation: question.explanation?.trim() || null,
+                  marks: question.marks || 1,
+                  order: questionOrder,
+                  isRequired:
+                    question.isRequired !== undefined
+                      ? question.isRequired
+                      : true,
+                  quizId: newQuiz.id,
+                  options: {
+                    create: question.options.map((opt, optIndex) => ({
+                      text: opt.text.trim(),
+                      isCorrect: opt.isCorrect,
+                      order: opt.order || optIndex + 1,
+                    })),
+                  },
+                },
+                include: {
+                  options: true,
+                },
+              });
+            }
+          );
+
+          createdQuestions = await Promise.all(questionPromises);
+        }
+
+        return {
+          quiz: newQuiz,
+          questions: createdQuestions,
+          questionsCount: createdQuestions.length,
+        };
+      });
+
+      return res.status(201).json(
+        new ApiResponse(
+          201,
+          {
+            quiz: result.quiz,
+            questions: result.questions,
+            questionsAdded: result.questionsCount,
+            totalMarks: calculatedTotalMarks,
+          },
+          `Quiz created successfully${
+            result.questionsCount > 0
+              ? ` with ${result.questionsCount} questions`
+              : ""
+          }`
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // this controller is used to get all the quiz and show on front where user select which quiz he need to attempt
 export const getAllQuizController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -371,7 +603,7 @@ export const getAllQuizController = asyncHandler(
           status: "PUBLISHED",
         },
         orderBy: {
-          createdAt: "asc",
+          createdAt: "desc",
         },
         select: {
           id: true,
@@ -400,7 +632,7 @@ export const getAllQuizController = asyncHandler(
           studentId: studentProfileId,
         },
         orderBy: {
-          assignedAt: "asc",
+          assignedAt: "desc",
         },
         select: {
           quiz: {
@@ -481,17 +713,17 @@ export const getAllOwnQuizFor_TeacherController = asyncHandler(
         await Promise.all([
           prisma.quiz.findMany({
             where: { accessType: "PUBLIC", createdById: userId },
-            orderBy: { createdAt: "asc" },
+            orderBy: { createdAt: "desc" },
             select: quizSelectFields,
           }),
           prisma.quiz.findMany({
             where: { accessType: "PRIVATE", createdById: userId },
-            orderBy: { createdAt: "asc" },
+            orderBy: { createdAt: "desc" },
             select: quizSelectFields,
           }),
           prisma.quiz.findMany({
             where: { accessType: "PROTECTED", createdById: userId },
-            orderBy: { createdAt: "asc" },
+            orderBy: { createdAt: "desc" },
             select: quizSelectFields,
           }),
         ]);
@@ -523,6 +755,7 @@ export const getQuizByIdController = asyncHandler(
 
       const quiz = await prisma.quiz.findUnique({
         where: { id },
+
         select: {
           id: true,
           title: true,
@@ -603,6 +836,9 @@ export const getQuizByCategoryController = asyncHandler(
           accessType: "PUBLIC",
           status: "PUBLISHED",
           endTime: { lte: new Date() },
+        },
+        orderBy: {
+          createdAt: "desc",
         },
         select: {
           id: true,
@@ -1717,6 +1953,9 @@ export const getAllAttempetedQuizController = asyncHandler(
       const attemptedQuizzes = await prisma.result.findMany({
         where: {
           studentId: userId,
+        },
+        orderBy: {
+          submittedAt: "desc",
         },
         include: {
           quiz: {
