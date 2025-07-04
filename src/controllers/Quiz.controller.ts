@@ -1821,7 +1821,7 @@ export const gradingStatsController = asyncHandler(
 export const getQuizReportController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { quizId } = req.query;
+      const { quizId, sessionId } = req.body;
       const studentId = req.user?.roleId;
 
       if (!quizId || !studentId) {
@@ -1832,8 +1832,8 @@ export const getQuizReportController = asyncHandler(
         where: {
           quizId: quizId as string,
           studentId: studentId as string,
+          sessionId: sessionId,
         },
-        orderBy: { submittedAt: "desc" },
         include: {
           quiz: {
             include: {

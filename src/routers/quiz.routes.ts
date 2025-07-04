@@ -38,8 +38,7 @@ router.route("/category/:categoryId").get(getQuizByCategoryController);
 router.route("/delete/:id").delete(deleteQuizController);
 
 router.route("/start/:quizId").post(startQuizController);
-
-router.route("/submit").post(submitQuizController);
+router.route("/submit/:quizId").post(submitQuizController);
 
 router.route("/report").get(getQuizReportController);
 
