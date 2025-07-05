@@ -574,17 +574,13 @@ export const getAllQuizController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
-
-      if (!userId) {
-        throw new CustomError("Unauthorized", 401);
-      }
+      if (!userId) throw new CustomError("Unauthorized", 401);
 
       const role = req.user?.role;
       if (role !== "STUDENT") {
-        throw new CustomError("Login With Student Id To See Al Quiz", 403);
+        throw new CustomError("Login With Student Id To See All Quizzes", 403);
       }
 
-      // Find the studentProfileId from userId
       const studentProfile = await prisma.studentProfile.findFirst({
         where: { userId },
         select: { id: true },
@@ -596,8 +592,28 @@ export const getAllQuizController = asyncHandler(
 
       const studentProfileId = studentProfile.id;
 
+      // Fetch attempts by this student
+      const allAttempts = await prisma.result.findMany({
+        where: {
+          studentId: studentProfileId,
+        },
+        select: {
+          quizId: true,
+          attemptNumber: true,
+        },
+      });
+
+      // Map to track number of attempts per quiz
+      const attemptMap = new Map<string, number>();
+      allAttempts.forEach((attempt) => {
+        attemptMap.set(
+          attempt.quizId,
+          (attemptMap.get(attempt.quizId) || 0) + 1
+        );
+      });
+
       // Fetch all public quizzes
-      const publicQuizzes = await prisma.quiz.findMany({
+      const publicQuizzesRaw = await prisma.quiz.findMany({
         where: {
           accessType: "PUBLIC",
           status: "PUBLISHED",
@@ -626,8 +642,16 @@ export const getAllQuizController = asyncHandler(
         },
       });
 
-      // Fetch assigned quizzes to the student
-      const assignedQuizzes = await prisma.quizAssignment.findMany({
+      const publicQuizzes = publicQuizzesRaw.map((quiz) => {
+        const attempts = attemptMap.get(quiz.id) || 0;
+        return {
+          ...quiz,
+          isReachMaxAttempt: attempts >= quiz.maxAttempts,
+        };
+      });
+
+      // Fetch assigned quizzes
+      const assignedQuizzesRaw = await prisma.quizAssignment.findMany({
         where: {
           studentId: studentProfileId,
         },
@@ -659,14 +683,20 @@ export const getAllQuizController = asyncHandler(
         },
       });
 
-      const assignedQuizList = assignedQuizzes.map((q) => q.quiz);
+      const assignedQuizzes = assignedQuizzesRaw.map(({ quiz }) => {
+        const attempts = attemptMap.get(quiz.id) || 0;
+        return {
+          ...quiz,
+          isReachMaxAttempt: attempts >= quiz.maxAttempts,
+        };
+      });
 
       return res.status(200).json(
         new ApiResponse(
           200,
           {
             publicQuizzes,
-            assignedQuizzes: assignedQuizList,
+            assignedQuizzes,
           },
           "Quizzes fetched successfully"
         )
