@@ -624,6 +624,7 @@ export const resetPasswordController = asyncHandler(
   }
 );
 
+// student update parent email
 export const updateStudentParentController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -636,6 +637,10 @@ export const updateStudentParentController = asyncHandler(
 
       if (!studentProfile) {
         throw new CustomError("Student profile not found", 404);
+      }
+
+      if (!newParentId && !email) {
+        throw new CustomError("One Field Required", 400);
       }
 
       const parentUser = await prisma.parentProfile.findFirst({
@@ -661,7 +666,7 @@ export const updateStudentParentController = asyncHandler(
           id: studentUserId,
         },
         data: {
-          parentId: parentUser.userId,
+          parentId: parentUser.id,
         },
       });
 
@@ -732,39 +737,65 @@ export const updateUserProfileController = asyncHandler(
   }
 );
 
+// parent add children
 export const addChildToParentController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const parentUserId = req.params.id; // Parent's user ID
-      const { childUserId } = req.body; // Student's user ID
+      const parentUserId = req.user.roleId;
+      const { StudentEmail } = req.body; // Student's user ID
 
-      const parentUser = await prisma.parentProfile.findUnique({
-        where: { id: parentUserId },
+      const isStudent = await prisma.studentProfile.findFirst({
+        where: {
+          user: {
+            email: StudentEmail,
+          },
+        },
       });
-
-      if (!parentUser) {
-        throw new CustomError("Invalid parent ID", 400);
+      if (!isStudent) {
+        throw new CustomError("Student Profile Not Found!", 400);
       }
-
-      const studentProfile = await prisma.studentProfile.findUnique({
-        where: { userId: childUserId },
+      await prisma.studentProfile.update({
+        where: {
+          id: isStudent?.id,
+        },
+        data: {
+          parentId: parentUserId,
+        },
       });
 
-      if (!studentProfile) {
-        throw new CustomError("Student profile not found", 404);
-      }
-
-      const updatedStudentProfile = await prisma.studentProfile.update({
-        where: { userId: childUserId },
-        data: { parentId: parentUser.id },
+      const allChildren = await prisma.parentProfile.findMany({
+        where: {
+          id: parentUserId,
+        },
+        select: {
+          id: true,
+          user: {
+            select: {
+              id:true
+              name: true,
+              email: true,
+            },
+          },
+          children:{
+            select:{
+              id:true,
+              user:{
+                select:{
+                  id:true,
+                  name:true,
+                  email:true,
+                }
+              }
+            }
+          }
+        },
       });
-
       res
         .status(200)
         .json(
           new ApiResponse(
             200,
-            updatedStudentProfile,
+            allChildren,
             "Child added to parent successfully"
           )
         );
