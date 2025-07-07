@@ -58,8 +58,8 @@ model User {
   teacherProfile TeacherProfile? @relation("TeacherUser")
   adminProfile   AdminProfile?   @relation("AdminUser")
 
-  children       StudentProfile[] @relation("ParentRelation")
-  quizzes        Quiz[]        @relation("TeacherQuizzes")
+  // children       StudentProfile[] @relation("ParentRelation")
+  // quizzes        Quiz[]        @relation("TeacherQuizzes")
   sessions       QuizSession[]
 
   createdAt DateTime @default(now())
@@ -74,7 +74,7 @@ model StudentProfile {
   parentId  String?
 
   user       User     @relation("StudentUser", fields: [userId], references: [id], onDelete: Cascade)
-  parent     User?    @relation("ParentRelation", fields: [parentId], references: [id])
+  parent     ParentProfile?    @relation("ParentRelation", fields: [parentId], references: [id])
 
   assignedQuizzes QuizAssignment[]
   quizSessions   QuizSession[]
@@ -87,6 +87,7 @@ model ParentProfile {
   phone  String?
 
   user   User   @relation("ParentUser", fields: [userId], references: [id],onDelete: Cascade)
+  children       StudentProfile[] @relation("ParentRelation")
 }
 
 model TeacherProfile {
@@ -97,7 +98,7 @@ model TeacherProfile {
 
   
   user        User   @relation("TeacherUser", fields: [userId], references: [id], onDelete: Cascade)
-    // quizzes     Quiz[]        @relation("TeacherQuizzes")
+  quizzes     Quiz[]        @relation("TeacherQuizzes")
 
 
   assignedQuizzes QuizAssignment[]
@@ -124,8 +125,8 @@ model Quiz {
   title       String
   description String?
   instructions String?
-  createdBy   User      @relation("TeacherQuizzes", fields: [createdById], references: [id])
-  // createdBy   TeacherProfile      @relation("TeacherQuizzes", fields: [createdById], references: [id])
+  // createdBy   User      @relation("TeacherQuizzes", fields: [createdById], references: [id])
+  createdBy   TeacherProfile      @relation("TeacherQuizzes", fields: [createdById], references: [id],onDelete:Cascade)
 
   createdById String
   categoryId  String
@@ -186,22 +187,22 @@ model Option {
 
 model QuizAssignment {
   id         String         @id @default(uuid())
-  quiz       Quiz           @relation(fields: [quizId], references: [id])
+  quiz       Quiz           @relation(fields: [quizId], references: [id],onDelete:Cascade)
   quizId     String
-  student    StudentProfile @relation(fields: [studentId], references: [id])
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId  String
   assignedBy String
-  teacher    TeacherProfile @relation(fields: [assignedBy], references: [id])
+  teacher    TeacherProfile @relation(fields: [assignedBy], references: [id], onDelete: Cascade)
   assignedAt DateTime       @default(now())
 }
 
 model QuizSession {
   id          String       @id @default(uuid())
-  quiz        Quiz         @relation(fields: [quizId], references: [id])
+  quiz        Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
   quizId      String
   student     User         @relation(fields: [studentId], references: [id])
   studentId   String
-  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id])
+  studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
   studentProfileId String
   
   status      ResultStatus @default(IN_PROGRESS)
@@ -214,12 +215,12 @@ model QuizSession {
 }
 
 model Answer{
-   id          String      @id @default(uuid())
+  id          String      @id @default(uuid())
   session     QuizSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   sessionId   String
-  question    Question    @relation(fields: [questionId], references: [id])
+  question    Question    @relation(fields: [questionId], references: [id],onDelete: Cascade)
   questionId  String
-  option      Option?     @relation(fields: [optionId], references: [id])
+  option      Option?     @relation(fields: [optionId], references: [id],onDelete: SetNull)
   optionId    String?
   textAnswer  String?
   isCorrect   Boolean?
@@ -233,9 +234,9 @@ model Answer{
 
 model Result {
   id                  String   @id @default(uuid())
-  student             StudentProfile     @relation(fields: [studentId], references: [id])
+  student             StudentProfile     @relation(fields: [studentId], references: [id],onDelete: Cascade)
   studentId           String
-  quiz                Quiz     @relation(fields: [quizId], references: [id])
+  quiz                Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   quizId              String
   sessionId           String  @unique
   session             QuizSession @relation(fields: [sessionId], references: [id])

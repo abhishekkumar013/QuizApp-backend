@@ -148,6 +148,7 @@ export const SignInController = asyncHandler(
       }
 
       let roleId = null;
+      let parentDetail = null;
 
       switch (role) {
         case "STUDENT":
@@ -155,11 +156,21 @@ export const SignInController = asyncHandler(
             where: {
               userId: isUser.id,
             },
-            select: {
-              id: true,
+            include: {
+              parent: {
+                include: {
+                  user: {
+                    select: {
+                      name: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
             },
           });
           roleId = studentrole?.id;
+          parentDetail = studentrole?.parent;
           break;
         case "PARENT":
           const parentRole = await prisma.parentProfile.findFirst({
@@ -226,6 +237,7 @@ export const SignInController = asyncHandler(
               role: isUser.role,
               token: token,
               roleId: roleId,
+              ...(role === "STUDENT" && { parentDetail }),
             },
             "login successfully"
           )
@@ -267,42 +279,27 @@ export const SignOutController = asyncHandler(
   }
 );
 
+// student link their parent
 export const LinkParentStudentController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { studentEmail, parentEmail } = req.body;
+      const { parentEmail } = req.body;
 
-      if (!studentEmail || !parentEmail) {
-        throw new CustomError(
-          "Both student and parent emails are required",
-          400
-        );
+      if (!parentEmail) {
+        throw new CustomError("Parent emails are required", 400);
       }
 
-      // Find student
-      const student = await prisma.user.findUnique({
-        where: {
-          role_email: {
-            role: "STUDENT",
-            email: studentEmail,
-          },
-        },
-        include: {
-          studentProfile: true,
-        },
-      });
-
-      if (!student || !student.studentProfile) {
-        throw new CustomError("Student not found", 404);
-      }
+      const studentId = req.user?.roleId;
 
       // Find parent
-      const parent = await prisma.user.findUnique({
+      const parent = await prisma.parentProfile.findFirst({
         where: {
-          role_email: {
-            role: "PARENT",
+          user: {
             email: parentEmail,
           },
+        },
+        select: {
+          id: true,
         },
       });
 
@@ -313,7 +310,7 @@ export const LinkParentStudentController = asyncHandler(
       // Update student profile with parent ID
       const updatedProfile = await prisma.studentProfile.update({
         where: {
-          id: student.studentProfile.id,
+          id: studentId,
         },
         data: {
           parentId: parent.id,
@@ -492,37 +489,96 @@ export const updateUserController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = req.params.id;
-      const { name, role, email } = req.body;
+      const { name, email, parentEmail, phone, experienceYears } = req.body;
 
       const existingUser = await prisma.user.findUnique({
-        where: {
-          id: id,
+        where: { id },
+        include: {
+          studentProfile: true,
+          teacherProfile: true,
+          parentProfile: true,
         },
       });
 
       if (!existingUser) {
-        throw new CustomError("Invalid User Id || User not found", 404);
+        throw new CustomError("Invalid User ID || User not found", 404);
       }
 
-      const updatedData: any = {};
-      if (name) updatedData.name = name;
-      if (role) updatedData.role = role;
-      if (email) updatedData.email = email;
+      // Prevent role change
+      const originalRole = existingUser.role;
 
+      // Update only name and email (not role)
       const updatedUser = await prisma.user.update({
         where: { id },
-        data: updatedData,
+        data: {
+          name,
+          email,
+        },
       });
 
+      // Handle role-based profile updates
+      if (originalRole === "STUDENT") {
+        let parentId = null;
+        if (parentEmail) {
+          const parent = await prisma.parentProfile.findFirst({
+            where: {
+              user: {
+                email: parentEmail,
+              },
+            },
+          });
+          parentId = parent?.id;
+        }
+        await prisma.studentProfile.upsert({
+          where: { userId: id },
+          create: {
+            userId: id,
+            parentId: parentId || null,
+          },
+          update: {
+            parentId: parentId || null,
+          },
+        });
+      }
+
+      if (originalRole === "TEACHER") {
+        await prisma.teacherProfile.upsert({
+          where: { userId: id },
+          create: {
+            userId: id,
+            phone: phone || null,
+            experienceYears: experienceYears || 0,
+          },
+          update: {
+            phone: phone || null,
+            experienceYears: experienceYears || 0,
+          },
+        });
+      }
+
+      if (originalRole === "PARENT") {
+        await prisma.parentProfile.upsert({
+          where: { userId: id },
+          create: {
+            userId: id,
+            phone: phone || null,
+          },
+          update: {
+            phone: phone || null,
+          },
+        });
+      }
+
       const userResponse = {
+        id: updatedUser.id,
         name: updatedUser.name,
         email: updatedUser.email,
-        role: updatedUser.role,
+        role: originalRole,
       };
 
       return res
         .status(200)
-        .json(new ApiResponse(200, userResponse, "user updated successfully"));
+        .json(new ApiResponse(200, userResponse, "User updated successfully"));
     } catch (error) {
       next(error);
     }

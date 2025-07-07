@@ -6,6 +6,7 @@ import {
   getExactSearchForTeacherController,
   getExactSearchForUserController,
   GetUserController,
+  LinkParentStudentController,
   resetPasswordController,
   searchParentController,
   searchStudentController,
@@ -33,9 +34,10 @@ router.use(isAuthenticated);
 router.route("/user/isauthenticated").get(VerifyUserController);
 router.route("/users/signout").post(SignOutController);
 router.route("/users/search/:search").get(SearchUsersController);
-router.route("/users/:id").put(updateUserController);
+router.route("/users/update/:id").put(updateUserController);
 router.route("/users/reset-password").put(resetPasswordController);
 router.route("/users/switch-role").post(switchUserRoleController);
+router.route("/users/link-parent").put(LinkParentStudentController);
 
 router.route("/parents/:id/add-child").put(addChildToParentController);
 
