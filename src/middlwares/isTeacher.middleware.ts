@@ -8,15 +8,12 @@ export const isTeacher = asyncHandler(
     try {
       const userrole = req.user?.role;
       const id = req.user?.id;
-      const getrole = await prisma.user.findUnique({
+      const isTeacher = await prisma.teacherProfile.findFirst({
         where: {
-          id: id,
-        },
-        select: {
-          role: true,
+          userId: id,
         },
       });
-      if (!userrole || userrole !== "TEACHER" || getrole?.role !== "TEACHER") {
+      if (!userrole || userrole !== "TEACHER" || !isTeacher) {
         throw new CustomError("Unauthorized", 403);
       }
       next();

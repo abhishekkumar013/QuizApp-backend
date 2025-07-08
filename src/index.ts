@@ -48,10 +48,11 @@ app.use("/api/v1/category", CategoryRoutes);
 const activeQuizSessions = new Map();
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+  // console.log("User connected:", socket.id);
 
   socket.on("start-quiz", async ({ quizId, userId, studentProfileId }) => {
     try {
+      // console.log(studentProfileId);
       const session = await prisma.quizSession.create({
         data: {
           quizId,
@@ -194,7 +195,7 @@ io.on("connection", (socket) => {
         0
       );
       const percentage = totalMarks > 0 ? (score / totalMarks) * 100 : 0;
-      const isPassed = score >= updatedSession.quiz.passingMarks;
+      const isPassed = percentage >= updatedSession.quiz.passingMarks;
 
       // Get the current attempt number
       const existingResults = await prisma.result.findMany({

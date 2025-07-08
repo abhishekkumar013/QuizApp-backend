@@ -637,7 +637,7 @@ export const getAllQuizController = asyncHandler(
             select: { id: true, name: true },
           },
           createdBy: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, user: { select: { name: true, email: true } } },
           },
         },
       });
@@ -676,7 +676,10 @@ export const getAllQuizController = asyncHandler(
                 select: { id: true, name: true },
               },
               createdBy: {
-                select: { id: true, name: true, email: true },
+                select: {
+                  id: true,
+                  user: { select: { name: true, email: true } },
+                },
               },
             },
           },
@@ -760,9 +763,6 @@ export const getAllOwnQuizFor_TeacherController = asyncHandler(
           }),
         ]);
 
-      console.log("pub", publicQuizzes);
-      console.log("priv", privateQuizzes);
-
       return res.status(200).json(
         new ApiResponse(
           200,
@@ -805,8 +805,12 @@ export const getQuizByIdController = asyncHandler(
           createdBy: {
             select: {
               id: true,
-              name: true,
-              email: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
             },
           },
           questions: {
@@ -2138,6 +2142,69 @@ export const getAllPublicQUizzesController = asyncHandler(
         .json(
           new ApiResponse(200, quizes, "Public quizzes fetched successfully")
         );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// quiz report for teacher
+export const getQuizReportForTeacher = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const quizId = req.params.quizId;
+
+      const resultData = await prisma.result.findMany({
+        where: { quizId },
+        select: {
+          percentage: true,
+          isPassed: true,
+          questionsCorrect: true,
+          questionsIncorrect: true,
+          student: {
+            select: {
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const appearedStudents = resultData.length;
+
+      const passed = resultData.filter((r) => r.isPassed).length;
+      const failed = resultData.filter((r) => !r.isPassed).length;
+
+      const highestPercentage = Math.max(
+        ...resultData.map((r) => r.percentage)
+      );
+
+      const studentDetails = resultData.map((r) => ({
+        name: r.student.user.name,
+        email: r.student.user.email,
+        percentage: r.percentage,
+        correctAnswers: r.questionsCorrect,
+        wrongAnswers: r.questionsIncorrect,
+        isPassed: r.isPassed,
+      }));
+
+      res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            appearedStudents,
+            passed,
+            failed,
+            highestPercentage,
+            studentDetails,
+          },
+          "Quiz stats fetched successfully"
+        )
+      );
     } catch (error) {
       next(error);
     }

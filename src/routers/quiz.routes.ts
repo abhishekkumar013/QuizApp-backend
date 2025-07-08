@@ -16,6 +16,7 @@ import {
   getQuizByCategoryController,
   getQuizByIdController,
   getQuizReportController,
+  getQuizReportForTeacher,
   getStudentsWhoAttemptedQuizController,
   gradeAnswerController,
   gradingStatsController,
@@ -53,6 +54,7 @@ router.route("/grade").post(gradeAnswerController);
 router.route("/bulk-grade").post(bulkGradeANswerController);
 router.route("/grade-statics").get(gradingStatsController);
 router.route("/own-quiz").get(getAllOwnQuizFor_TeacherController);
+router.route("/teacher/report/:quizId").get(getQuizReportForTeacher);
 
 router.use(isAdmin);
 
