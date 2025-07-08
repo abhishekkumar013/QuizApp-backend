@@ -363,7 +363,7 @@ export const createQuizWithQuestions = asyncHandler(
         questions,
       } = req.body;
 
-      const userId = req.user?.id;
+      const userId = req.user?.roleId;
       if (!userId) {
         throw new CustomError("User not authenticated", 401);
       }
@@ -710,7 +710,7 @@ export const getAllQuizController = asyncHandler(
 export const getAllOwnQuizFor_TeacherController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.user?.roleId;
       if (!userId) {
         throw new CustomError("Unauthorized", 401);
       }
@@ -736,7 +736,9 @@ export const getAllOwnQuizFor_TeacherController = asyncHandler(
         startTime: true,
         endTime: true,
         category: { select: { id: true, name: true } },
-        createdBy: { select: { id: true, name: true, email: true } },
+        createdBy: {
+          select: { id: true, user: { select: { name: true, email: true } } },
+        },
       };
 
       const [publicQuizzes, privateQuizzes, protectedQuizzes] =
@@ -757,6 +759,9 @@ export const getAllOwnQuizFor_TeacherController = asyncHandler(
             select: quizSelectFields,
           }),
         ]);
+
+      console.log("pub", publicQuizzes);
+      console.log("priv", privateQuizzes);
 
       return res.status(200).json(
         new ApiResponse(

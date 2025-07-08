@@ -763,7 +763,7 @@ export const addChildToParentController = asyncHandler(
         },
       });
 
-      const allChildren = await prisma.parentProfile.findMany({
+      const allChildren = await prisma.parentProfile.findUnique({
         where: {
           id: parentUserId,
         },
@@ -771,25 +771,26 @@ export const addChildToParentController = asyncHandler(
           id: true,
           user: {
             select: {
-              id:true
+              id: true,
               name: true,
               email: true,
             },
           },
-          children:{
-            select:{
-              id:true,
-              user:{
-                select:{
-                  id:true,
-                  name:true,
-                  email:true,
-                }
-              }
-            }
-          }
+          children: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
         },
       });
+
       res
         .status(200)
         .json(
