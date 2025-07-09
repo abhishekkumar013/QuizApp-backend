@@ -15,6 +15,7 @@ import {
   getPendingEvaluationsController,
   getQuizByCategoryController,
   getQuizByIdController,
+  getQuizByIdFor_Teacher_Controller,
   getQuizReportController,
   getQuizReportForTeacher,
   getStudentsWhoAttemptedQuizController,
@@ -22,6 +23,7 @@ import {
   gradingStatsController,
   startQuizController,
   submitQuizController,
+  updateQuizWithQuestions,
 } from "../controllers/Quiz.controller";
 
 const router: Router = express.Router();
@@ -55,6 +57,8 @@ router.route("/bulk-grade").post(bulkGradeANswerController);
 router.route("/grade-statics").get(gradingStatsController);
 router.route("/own-quiz").get(getAllOwnQuizFor_TeacherController);
 router.route("/teacher/report/:quizId").get(getQuizReportForTeacher);
+router.route("/teacher/:id").get(getQuizByIdFor_Teacher_Controller);
+router.route("/update/:quizId").put(updateQuizWithQuestions);
 
 router.use(isAdmin);
 

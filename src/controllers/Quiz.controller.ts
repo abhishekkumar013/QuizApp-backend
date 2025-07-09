@@ -798,6 +798,9 @@ export const getQuizByIdController = asyncHandler(
           instructions: true,
           totalMarks: true,
           accessType: true,
+          status: true,
+          difficulty: true,
+          passingMarks: true,
           maxAttempts: true,
           durationInMinutes: true,
           startTime: true,
@@ -2203,6 +2206,377 @@ export const getQuizReportForTeacher = asyncHandler(
             studentDetails,
           },
           "Quiz stats fetched successfully"
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// quiz for teacher
+export const getQuizByIdFor_Teacher_Controller = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        throw new CustomError("Quiz ID is required", 400);
+      }
+      const roleId = req?.user?.roleId;
+
+      const quiz = await prisma.quiz.findUnique({
+        where: {
+          id,
+          createdById: roleId,
+        },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          instructions: true,
+          totalMarks: true,
+          accessType: true,
+          status: true,
+          difficulty: true,
+          passingMarks: true,
+          maxAttempts: true,
+          durationInMinutes: true,
+          startTime: true,
+          endTime: true,
+          createdBy: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          questions: {
+            include: {
+              options: true,
+            },
+          },
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (!quiz) {
+        throw new CustomError("Quiz not found", 404);
+      }
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, quiz, "Quiz fetched successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+export const updateQuizWithQuestions = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const {
+        title,
+        description,
+        instructions,
+        startTime,
+        endTime,
+        categoryId,
+        accessType,
+        status,
+        difficulty,
+        durationInMinutes,
+        totalMarks,
+        passingMarks,
+        maxAttempts,
+        questions,
+      } = req.body;
+
+      const quizId = req.params.quizId;
+      const roleId = req?.user?.roleId;
+
+      const existingQuiz = await prisma.quiz.findFirst({
+        where: { id: quizId, createdById: roleId },
+        include: { questions: true },
+      });
+
+      if (!existingQuiz) throw new CustomError("Quiz not found", 404);
+
+      const isCategoryId = await prisma.category.findUnique({
+        where: { id: categoryId },
+      });
+
+      if (!isCategoryId) throw new CustomError("Category not found", 404);
+
+      let validatedQuestions = [];
+      let calculatedTotalMarks = totalMarks || 0;
+
+      if (questions && Array.isArray(questions) && questions.length > 0) {
+        for (let i = 0; i < questions.length; i++) {
+          const question = questions[i];
+          if (!question.text?.trim())
+            throw new CustomError(`Question ${i + 1}: Text is required`, 400);
+          if (typeof question.score !== "number" || question.score < 0)
+            throw new CustomError(
+              `Question ${i + 1}: Score must be non-negative`,
+              400
+            );
+          if (typeof question.marks !== "number" || question.marks <= 0)
+            throw new CustomError(
+              `Question ${i + 1}: Marks must be positive`,
+              400
+            );
+          if (typeof question.order !== "number" || question.order < 0)
+            throw new CustomError(
+              `Question ${i + 1}: Order must be non-negative`,
+              400
+            );
+          if (!Array.isArray(question.options))
+            throw new CustomError(
+              `Question ${i + 1}: Options must be an array`,
+              400
+            );
+          if (question.options.length < 2)
+            throw new CustomError(
+              `Question ${i + 1}: At least 2 options are required`,
+              400
+            );
+          if (question.options.length > 5)
+            throw new CustomError(
+              `Question ${i + 1}: Maximum 5 options allowed`,
+              400
+            );
+
+          const optionTexts = new Set();
+          let hasCorrectAnswer = false;
+
+          for (let j = 0; j < question.options.length; j++) {
+            const option = question.options[j];
+            if (!option.text?.trim())
+              throw new CustomError(
+                `Question ${i + 1}, Option ${j + 1}: Text is required`,
+                400
+              );
+            const lowerCaseText = option.text.trim().toLowerCase();
+            if (optionTexts.has(lowerCaseText))
+              throw new CustomError(
+                `Question ${i + 1}, Option ${j + 1}: Duplicate text`,
+                400
+              );
+            optionTexts.add(lowerCaseText);
+
+            if (typeof option.isCorrect !== "boolean")
+              throw new CustomError(
+                `Question ${i + 1}, Option ${j + 1}: isCorrect must be boolean`,
+                400
+              );
+            if (typeof option.order !== "number" || option.order < 0)
+              throw new CustomError(
+                `Question ${i + 1}, Option ${
+                  j + 1
+                }: Order must be non-negative`,
+                400
+              );
+            if (option.isCorrect) hasCorrectAnswer = true;
+          }
+
+          if (!hasCorrectAnswer)
+            throw new CustomError(
+              `Question ${i + 1}: At least one correct option required`,
+              400
+            );
+
+          if (question.id && typeof question.id === "string") {
+            const existingQuestion = await prisma.question.findUnique({
+              where: { id: question.id },
+              select: { quizId: true },
+            });
+
+            if (!existingQuestion)
+              throw new CustomError(
+                `Question ${i + 1}: Question not found`,
+                404
+              );
+            if (existingQuestion.quizId !== quizId)
+              throw new CustomError(
+                `Question ${i + 1}: Does not belong to this quiz`,
+                403
+              );
+          }
+
+          validatedQuestions.push(question);
+        }
+
+        if (!totalMarks) {
+          calculatedTotalMarks = validatedQuestions.reduce(
+            (sum, q) => sum + (q.marks || 1),
+            0
+          );
+        }
+      }
+
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const existingQuestionIds = existingQuiz.questions.map((q) => q.id);
+          const incomingQuestionIds = validatedQuestions
+            .filter((q) => q.id)
+            .map((q) => q.id);
+
+          const questionsToDelete = existingQuestionIds.filter(
+            (id) => !incomingQuestionIds.includes(id)
+          );
+
+          if (questionsToDelete.length > 0) {
+            await tx.question.deleteMany({
+              where: { id: { in: questionsToDelete } },
+            });
+          }
+
+          const updatedQuiz = await tx.quiz.update({
+            where: { id: quizId, createdById: roleId },
+            data: {
+              title,
+              description,
+              instructions,
+              categoryId,
+              accessType,
+              status:
+                status === "PUBLISHED" && validatedQuestions.length > 0
+                  ? "PUBLISHED"
+                  : status || "DRAFT",
+              difficulty,
+              durationInMinutes,
+              totalMarks: calculatedTotalMarks,
+              passingMarks,
+              maxAttempts,
+              startTime: new Date(startTime),
+              endTime: new Date(endTime),
+            },
+          });
+
+          const processedQuestions = await Promise.all(
+            validatedQuestions.map(async (question) => {
+              const questionOrder = question.order || 1;
+              let questionId: string;
+
+              // UPDATE or CREATE question
+              if (question.id && typeof question.id === "string") {
+                const updated = await tx.question.update({
+                  where: { id: String(question.id) },
+                  data: {
+                    text: question.text.trim(),
+                    score: question.score,
+                    explanation: question.explanation?.trim() || null,
+                    marks: question.marks || 1,
+                    order: questionOrder,
+                    isRequired: question.isRequired ?? true,
+                  },
+                });
+                questionId = updated.id;
+
+                // 💡 Only check existing options if updating
+                const existingOptions = await tx.option.findMany({
+                  where: { questionId },
+                  select: { id: true },
+                });
+
+                const existingOptionIds = existingOptions.map((opt) => opt.id);
+                const incomingOptionIds = question.options
+                  .filter((o) => typeof o.id === "string")
+                  .map((o) => o.id as string);
+
+                const optionsToDelete = existingOptionIds.filter(
+                  (id) => !incomingOptionIds.includes(id)
+                );
+
+                if (optionsToDelete.length > 0) {
+                  await tx.option.deleteMany({
+                    where: { id: { in: optionsToDelete } },
+                  });
+                }
+              } else {
+                const created = await tx.question.create({
+                  data: {
+                    text: question.text.trim(),
+                    score: question.score,
+                    explanation: question.explanation?.trim() || null,
+                    marks: question.marks || 1,
+                    order: questionOrder,
+                    isRequired: question.isRequired ?? true,
+                    quizId: updatedQuiz.id,
+                  },
+                });
+                questionId = created.id;
+              }
+
+              // CREATE or UPDATE options
+              const processedOptions = await Promise.all(
+                question.options.map(async (option) => {
+                  const data = {
+                    text: option.text.trim(),
+                    isCorrect: option.isCorrect,
+                    order: option.order,
+                    questionId,
+                  };
+
+                  if (option.id && typeof option.id === "string") {
+                    return await tx.option.update({
+                      where: { id: option.id },
+                      data,
+                    });
+                  } else {
+                    return await tx.option.create({ data });
+                  }
+                })
+              );
+
+              const fullQuestion = await tx.question.findUnique({
+                where: { id: questionId },
+              });
+
+              return {
+                ...fullQuestion,
+                options: processedOptions,
+              };
+            })
+          );
+
+          return {
+            quiz: updatedQuiz,
+            questions: processedQuestions,
+            questionsCount: processedQuestions.length,
+            totalMarks: calculatedTotalMarks,
+          };
+        },
+        {
+          timeout: 20000, // 20 seconds
+          maxWait: 5000, // optional wait time before starting the transaction
+        }
+      );
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          {
+            quiz: result.quiz,
+            questions: result.questions,
+            questionsAdded: result.questionsCount,
+            totalMarks: result.totalMarks,
+          },
+          `Quiz updated successfully${
+            result.questionsCount > 0
+              ? ` with ${result.questionsCount} questions`
+              : ""
+          }`
         )
       );
     } catch (error) {
