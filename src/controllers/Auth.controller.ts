@@ -490,6 +490,7 @@ export const updateUserController = asyncHandler(
     try {
       const id = req.params.id;
       const { name, email, parentEmail, phone, experienceYears } = req.body;
+      console.log(req.body)
 
       const existingUser = await prisma.user.findUnique({
         where: { id },
@@ -516,6 +517,12 @@ export const updateUserController = asyncHandler(
         },
       });
 
+      let pEMail=null;
+      let tphone=null;
+      let pPhone=null;
+      let texpYear=0;
+
+
       // Handle role-based profile updates
       if (originalRole === "STUDENT") {
         let parentId = null;
@@ -528,53 +535,53 @@ export const updateUserController = asyncHandler(
             },
           });
           parentId = parent?.id;
+          await prisma.studentProfile.update({
+            where: { userId: id },
+            data: {
+              parentId: parentId,
+            },
+          });
+          pEMail=parentEmail
         }
-        await prisma.studentProfile.upsert({
-          where: { userId: id },
-          create: {
-            userId: id,
-            parentId: parentId || null,
-          },
-          update: {
-            parentId: parentId || null,
-          },
-        });
       }
 
       if (originalRole === "TEACHER") {
-        await prisma.teacherProfile.upsert({
+        await prisma.teacherProfile.update({
           where: { userId: id },
-          create: {
-            userId: id,
-            phone: phone || null,
-            experienceYears: experienceYears || 0,
-          },
-          update: {
+          data: {
             phone: phone || null,
             experienceYears: experienceYears || 0,
           },
         });
+        texpYear=experienceYears
+        tphone=phone
       }
 
       if (originalRole === "PARENT") {
-        await prisma.parentProfile.upsert({
+        await prisma.parentProfile.update({
           where: { userId: id },
-          create: {
-            userId: id,
-            phone: phone || null,
-          },
-          update: {
+          data: {
             phone: phone || null,
           },
         });
+        pPhone=phone
       }
 
-      const userResponse = {
+      const userResponse: any = {
         id: updatedUser.id,
         name: updatedUser.name,
         email: updatedUser.email,
         role: originalRole,
       };
+      
+      if(originalRole==="STUDENT"){
+        userResponse.parentEmail=pEMail
+      }else if(originalRole==="TEACHER"){
+        userResponse.phoe=tphone
+        userResponse.experienceYears=texpYear
+      }else{
+        userResponse.phone=pPhone
+      }
 
       return res
         .status(200)
