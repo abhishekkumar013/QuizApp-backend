@@ -226,6 +226,19 @@ io.on("connection", (socket) => {
         },
       });
 
+      // increment point by correct quuestion
+      await prisma.studentProfile.update({
+        where: {
+          id: sessionInfo.studentProfileId,
+        },
+        data: {
+          points: {
+            increment: questionsCorrect,
+          },
+        },
+      });
+      
+
       // Remove from active sessions
       activeQuizSessions.delete(socket.id);
 

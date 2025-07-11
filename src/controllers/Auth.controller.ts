@@ -490,16 +490,16 @@ export const updateUserController = asyncHandler(
     try {
       const id = req.params.id;
       const { name, email, parentEmail, phone, experienceYears } = req.body;
-      console.log(req.body)
+      // console.log(req.body)
 
       const existingUser = await prisma.user.findUnique({
-        where: { id },
-        include: {
-          studentProfile: true,
-          teacherProfile: true,
-          parentProfile: true,
-        },
+        where: { id:id },
+        select:{
+          role:true
+        }
       });
+      // console.log(existingUser)
+      
 
       if (!existingUser) {
         throw new CustomError("Invalid User ID || User not found", 404);
@@ -527,14 +527,22 @@ export const updateUserController = asyncHandler(
       if (originalRole === "STUDENT") {
         let parentId = null;
         if (parentEmail) {
-          const parent = await prisma.parentProfile.findFirst({
+          // console.log(parentEmail)
+          const parent = await prisma.user.findFirst({
             where: {
-              user: {
-                email: parentEmail,
-              },
+             email:parentEmail
             },
-          });
-          parentId = parent?.id;
+            select:{
+              parentProfile:{
+                select:{
+                  id:true
+                },
+              
+            }
+          }
+        });
+          // console.log("P",parent)
+          parentId = parent?.parentProfile?.id;
           await prisma.studentProfile.update({
             where: { userId: id },
             data: {
@@ -919,25 +927,29 @@ export const getAllTeachersController = asyncHandler(
 export const getParentChildrenController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const parentId = req.params.id || (req as any).user?.id;
+      const parentId = req.user?.roleId;
+      console.log(parentId)
 
-      const children = await prisma.studentProfile.findMany({
-        where: { parentId },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              createdAt: true,
-            },
-          },
+      const childrens = await prisma.studentProfile.findMany({
+        where: {
+          parentId: parentId
         },
+        include:{
+          user:{
+            select:{
+              name:true,
+              email:true
+            }
+          }
+        }
       });
+      
+
+      console.log(childrens)
 
       res
         .status(200)
-        .json(new ApiResponse(200, children, "Children fetched successfully"));
+        .json(new ApiResponse(200, childrens, "Children fetched successfully"));
     } catch (error) {
       next(error);
     }

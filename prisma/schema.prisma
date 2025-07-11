@@ -72,6 +72,9 @@ model StudentProfile {
   id        String   @id @default(uuid())
   userId    String   @unique
   parentId  String?
+  Block     Boolean @default(false)
+  Rank      Int     @default(-1)
+  points    Int     @default(0)
 
   user       User     @relation("StudentUser", fields: [userId], references: [id], onDelete: Cascade)
   parent     ParentProfile?    @relation("ParentRelation", fields: [parentId], references: [id])
@@ -85,9 +88,10 @@ model ParentProfile {
   id     String @id @default(uuid())
   userId String @unique
   phone  String?
+  Block     Boolean @default(false)
 
   user   User   @relation("ParentUser", fields: [userId], references: [id],onDelete: Cascade)
-  children       StudentProfile[] @relation("ParentRelation")
+  childrens       StudentProfile[] @relation("ParentRelation")
 }
 
 model TeacherProfile {
@@ -95,6 +99,7 @@ model TeacherProfile {
   userId          String @unique
   phone           String?
   experienceYears Int?   @default(0)
+  Block     Boolean @default(false)
 
   
   user        User   @relation("TeacherUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -109,6 +114,7 @@ model  AdminProfile{
   userId String @unique
   phone  String?
   isVerified Boolean @default(false)
+  Block     Boolean @default(false)
 
   user   User   @relation("AdminUser", fields: [userId], references: [id], onDelete: Cascade)
 }

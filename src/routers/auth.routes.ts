@@ -5,6 +5,7 @@ import {
   getAllTeachersController,
   getExactSearchForTeacherController,
   getExactSearchForUserController,
+  getParentChildrenController,
   GetUserController,
   LinkParentStudentController,
   resetPasswordController,
@@ -38,6 +39,7 @@ router.route("/users/update/:id").put(updateUserController);
 router.route("/users/reset-password").put(resetPasswordController);
 router.route("/users/switch-role").post(switchUserRoleController);
 router.route("/users/link-parent").put(LinkParentStudentController);
+router.route("/users/get-childrens").get(getParentChildrenController);
 
 router.route("/parents/:id/add-child").put(addChildToParentController);
 
