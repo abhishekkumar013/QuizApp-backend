@@ -940,8 +940,26 @@ export const getParentChildrenController = asyncHandler(
               name:true,
               email:true
             }
+          },
+          results:{
+            select:{
+              score:true,
+              totalMarks:true,
+              percentage:true,
+            }
           }
         }
+      });
+      const enrichedChildren = childrens.map((child) => {
+        const quizzesTaken = child.results.length;
+        const totalPercentage = child.results.reduce((sum, r) => sum + r.percentage, 0);
+        const averageScore = quizzesTaken > 0 ? totalPercentage / quizzesTaken : 0;
+
+        return {
+          ...child,
+          quizzesTaken,
+          averageScore: parseFloat(averageScore.toFixed(2)), 
+        };
       });
       
 
@@ -949,7 +967,7 @@ export const getParentChildrenController = asyncHandler(
 
       res
         .status(200)
-        .json(new ApiResponse(200, childrens, "Children fetched successfully"));
+        .json(new ApiResponse(200, enrichedChildren, "Children fetched successfully"));
     } catch (error) {
       next(error);
     }
