@@ -928,7 +928,7 @@ export const getParentChildrenController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parentId = req.user?.roleId;
-      console.log(parentId)
+      // console.log(parentId)
 
       const childrens = await prisma.studentProfile.findMany({
         where: {
@@ -963,7 +963,7 @@ export const getParentChildrenController = asyncHandler(
       });
       
 
-      console.log(childrens)
+      // console.log(childrens)
 
       res
         .status(200)

@@ -1,19 +1,19 @@
 import express, { Router } from "express";
-import { isAuthenticated } from "../middlwares/Auth.middleware";
-import { isAdmin } from "../middlwares/isAdmin.middleware";
-import { isTeacher } from "../middlwares/isTeacher.middleware";
 import {
   getAllResultController,
   getAllStudentRankController,
   getResultByIdController,
+  getStudentResultForParentController,
 } from "../controllers/Result.controller";
+import { isAuthenticated } from "../middlwares/Auth.middleware";
 
 const router: Router = express.Router();
 
 router.use(isAuthenticated);
 
 router.route("/rank").get(getAllStudentRankController);
-router.route("/").get(getAllResultController);
-router.route("/:id").get(getResultByIdController);
+router.route("/child/:childrenId").get(getStudentResultForParentController)
+router.route("/all").get(getAllResultController);
+router.route("/single/:id").get(getResultByIdController);
 
 export default router;

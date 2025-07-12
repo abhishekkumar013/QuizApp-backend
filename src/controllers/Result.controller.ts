@@ -8,30 +8,49 @@ import { ApiResponse } from "../Lib/apiResponse";
 export const getAllResultController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const studentId = req.user?.id;
+      const studentId = req.user?.roleId;
       if (!studentId) {
         throw new CustomError("Unauthorized", 401);
       }
 
-      const results = await prisma.result.findMany({
-        where: {
+      const results =await prisma.result.findMany({
+        where:{
           studentId: studentId,
         },
-        include: {
-          quiz: {
-            select: {
-              id: true,
-              title: true,
-              createdBy: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
+        include:{
+          student:{
+            select:{
+              id:true,
+
+            }
           },
-        },
-      });
+          quiz:{
+            select:{
+              title:true,
+              totalMarks:true,
+              durationInMinutes:true,
+              difficulty:true,
+              category:{
+                select:{
+                  name:true
+                }
+              },
+              createdBy:{
+                select:{
+                  user:{
+                    select:{
+                        email:true,
+                        name:true
+                    }
+                  }
+                }
+              },
+              passingMarks:true,
+
+            }
+          }
+        }
+      })
       if (!results || results.length === 0) {
         throw new CustomError("No results found", 404);
       }
@@ -176,6 +195,64 @@ export const getAllStudentRankController = asyncHandler(
             "Quiz ranks retrieved successfully"
           )
         );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+export const getStudentResultForParentController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const studentId = req.params?.childrenId;
+      // console.log(studentId)
+      if (!studentId) {
+        throw new CustomError("Unauthorized  ho", 401);
+      }
+
+      const results =await prisma.result.findMany({
+        where:{
+          studentId: studentId,
+        },
+        include:{
+          student:{
+            select:{
+              id:true,
+
+            }
+          },
+          quiz:{
+            select:{
+              title:true,
+              totalMarks:true,
+              durationInMinutes:true,
+              difficulty:true,
+              category:{
+                select:{
+                  name:true
+                }
+              },
+              createdBy:{
+                select:{
+                  user:{
+                    select:{
+                        email:true,
+                        name:true
+                    }
+                  }
+                }
+              },
+              passingMarks:true,
+
+            }
+          }
+        }
+      })
+      if (!results || results.length === 0) {
+        throw new CustomError("No results found", 404);
+      }
+      res
+        .status(200)
+        .json(new ApiResponse(200, results, "Results retrieved successfully"));
     } catch (error) {
       next(error);
     }
