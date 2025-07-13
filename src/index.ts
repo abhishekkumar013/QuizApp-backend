@@ -194,7 +194,8 @@ io.on("connection", (socket) => {
         (sum, question) => sum + question.marks,
         0
       );
-      const percentage = totalMarks > 0 ? (score / totalMarks) * 100 : 0;
+      let percentage = totalMarks > 0 ? (score / totalMarks) * 100 : 0;
+      percentage = parseFloat(percentage.toFixed(2));
       const isPassed = percentage >= updatedSession.quiz.passingMarks;
 
       // Get the current attempt number

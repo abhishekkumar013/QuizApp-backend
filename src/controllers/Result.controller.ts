@@ -29,6 +29,59 @@ export const getAllResultController = asyncHandler(
                   user: { select: { name: true, email: true } },
                 },
               },
+              
+            },
+          },
+          
+        },
+      });
+
+      if (!results || results.length === 0) {
+        throw new CustomError("No results found", 404);
+      }
+
+      const studentData = results[0].student;
+
+     
+      res.status(200).json(
+        new ApiResponse(200, {
+          rank: studentData.Rank,
+          points: studentData.points,
+          results: results,
+        }, "Results retrieved successfully")
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+
+export const getAllResultByIdController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const studentId = req.user?.roleId;
+      const resultId=req.params.resultId;
+
+      if (!studentId) throw new CustomError("Unauthorized", 401);
+
+      const result = await prisma.result.findFirst({
+        where: { studentId ,id:resultId},
+        include: {
+          student: { select: { id: true, Rank: true, points: true } },
+          quiz: {
+            select: {
+              title: true,
+              totalMarks: true,
+              durationInMinutes: true,
+              difficulty: true,
+              passingMarks: true,
+              category: { select: { name: true } },
+              createdBy: {
+                select: {
+                  user: { select: { name: true, email: true } },
+                },
+              },
               questions: {
                 select: {
                   id: true,
@@ -64,47 +117,19 @@ export const getAllResultController = asyncHandler(
         },
       });
 
-      if (!results || results.length === 0) {
+      if (!result) {
         throw new CustomError("No results found", 404);
       }
 
-      const studentData = results[0].student;
+      const studentData = result.student;
 
-      const enhancedResults = results.map((result) => {
-        const answersMap = new Map();
-        result.session.answers.forEach((ans) => {
-          answersMap.set(ans.questionId, {
-            selectedOptionId: ans.optionId,
-            selectedOptionText: ans.option?.text || null,
-            isSelectedOptionCorrect: ans.isCorrect,
-          });
-        });
-
-        const updatedQuestions = result.quiz.questions.map((q) => {
-          const answer = answersMap.get(q.id) || {};
-          return {
-            ...q,
-            selectedOptionId: answer.selectedOptionId || null,
-            selectedOptionText: answer.selectedOptionText || null,
-            isSelectedOptionCorrect: answer.isSelectedOptionCorrect ?? null,
-          };
-        });
-
-        return {
-          ...result,
-          student: undefined, 
-          quiz: {
-            ...result.quiz,
-            questions: updatedQuestions,
-          },
-        };
-      });
+      
 
       res.status(200).json(
         new ApiResponse(200, {
           rank: studentData.Rank,
           points: studentData.points,
-          results: enhancedResults,
+          results: result,
         }, "Results retrieved successfully")
       );
     } catch (error) {
@@ -113,84 +138,81 @@ export const getAllResultController = asyncHandler(
   }
 );
 
+// export const getResultByIdController = asyncHandler(
+//   async (req: Request, res: Response, next: NextFunction) => {
+//     try {
+//       const studentId = req.user?.id;
+//       const id = req.params.id;
 
+//       if (!studentId) {
+//         throw new CustomError("Unauthorized", 401);
+//       }
+//       if (!id) {
+//         throw new CustomError("Result ID is required", 400);
+//       }
 
+//       const result = await prisma.result.findUnique({
+//         where: {
+//           quizId: id,
+//           studentId: studentId,
+//         },
+//         include: {
+//           quiz: {
+//             select: {
+//               id: true,
+//               title: true,
+//               durationInMinutes: true,
+//               createdBy: {
+//                 select: {
+//                   id: true,
+//                   name: true,
+//                 },
+//               },
+//               category: {
+//                 select: {
+//                   id: true,
+//                   name: true,
+//                 },
+//               },
+//             },
+//           },
+//         },
+//       });
 
-export const getResultByIdController = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const studentId = req.user?.id;
-      const id = req.params.id;
+//       if (!result) {
+//         throw new CustomError("Result not found", 404);
+//       }
 
-      if (!studentId) {
-        throw new CustomError("Unauthorized", 401);
-      }
-      if (!id) {
-        throw new CustomError("Result ID is required", 400);
-      }
+//       const rankfinder = await prisma.result.findMany({
+//         where: {
+//           quizId: id,
+//         },
+//         orderBy: {
+//           score: "desc",
+//         },
+//         select: {
+//           studentId: true,
+//           score: true,
+//         },
+//       });
 
-      const result = await prisma.result.findUnique({
-        where: {
-          quizId: id,
-          studentId: studentId,
-        },
-        include: {
-          quiz: {
-            select: {
-              id: true,
-              title: true,
-              durationInMinutes: true,
-              createdBy: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-              category: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-      });
+//       const studentrank =
+//         rankfinder.findIndex((s) => s.studentId === studentId) + 1;
 
-      if (!result) {
-        throw new CustomError("Result not found", 404);
-      }
-
-      const rankfinder = await prisma.result.findMany({
-        where: {
-          quizId: id,
-        },
-        orderBy: {
-          score: "desc",
-        },
-        select: {
-          studentId: true,
-          score: true,
-        },
-      });
-
-      const studentrank =
-        rankfinder.findIndex((s) => s.studentId === studentId) + 1;
-
-      res
-        .status(200)
-        .json(
-          new ApiResponse(
-            200,
-            { ...result, rank: studentrank },
-            "Result retrieved successfully"
-          )
-        );
-    } catch (error) {
-      next(error);
-    }
-  }
-);
+//       res
+//         .status(200)
+//         .json(
+//           new ApiResponse(
+//             200,
+//             { ...result, rank: studentrank },
+//             "Result retrieved successfully"
+//           )
+//         );
+//     } catch (error) {
+//       next(error);
+//     }
+//   }
+// );
 
 // rank for a particular quiz
 export const getAllStudentRankController = asyncHandler(
