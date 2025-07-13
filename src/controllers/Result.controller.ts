@@ -9,59 +9,112 @@ export const getAllResultController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const studentId = req.user?.roleId;
-      if (!studentId) {
-        throw new CustomError("Unauthorized", 401);
-      }
+      if (!studentId) throw new CustomError("Unauthorized", 401);
 
-      const results =await prisma.result.findMany({
-        where:{
-          studentId: studentId,
-        },
-        include:{
-          student:{
-            select:{
-              id:true,
-
-            }
+      const results = await prisma.result.findMany({
+        where: { studentId },
+        orderBy: { submittedAt: "asc" },
+        include: {
+          student: { select: { id: true, Rank: true, points: true } },
+          quiz: {
+            select: {
+              title: true,
+              totalMarks: true,
+              durationInMinutes: true,
+              difficulty: true,
+              passingMarks: true,
+              category: { select: { name: true } },
+              createdBy: {
+                select: {
+                  user: { select: { name: true, email: true } },
+                },
+              },
+              questions: {
+                select: {
+                  id: true,
+                  text: true,
+                  marks: true,
+                  isRequired: true,
+                  options: {
+                    select: {
+                      id: true,
+                      text: true,
+                      isCorrect: true,
+                      order: true,
+                    },
+                  },
+                },
+              },
+            },
           },
-          quiz:{
-            select:{
-              title:true,
-              totalMarks:true,
-              durationInMinutes:true,
-              difficulty:true,
-              category:{
-                select:{
-                  name:true
-                }
+          session: {
+            select: {
+              answers: {
+                select: {
+                  questionId: true,
+                  optionId: true,
+                  isCorrect: true,
+                  option: {
+                    select: { text: true },
+                  },
+                },
               },
-              createdBy:{
-                select:{
-                  user:{
-                    select:{
-                        email:true,
-                        name:true
-                    }
-                  }
-                }
-              },
-              passingMarks:true,
+            },
+          },
+        },
+      });
 
-            }
-          }
-        }
-      })
       if (!results || results.length === 0) {
         throw new CustomError("No results found", 404);
       }
-      res
-        .status(200)
-        .json(new ApiResponse(200, results, "Results retrieved successfully"));
+
+      const studentData = results[0].student;
+
+      const enhancedResults = results.map((result) => {
+        const answersMap = new Map();
+        result.session.answers.forEach((ans) => {
+          answersMap.set(ans.questionId, {
+            selectedOptionId: ans.optionId,
+            selectedOptionText: ans.option?.text || null,
+            isSelectedOptionCorrect: ans.isCorrect,
+          });
+        });
+
+        const updatedQuestions = result.quiz.questions.map((q) => {
+          const answer = answersMap.get(q.id) || {};
+          return {
+            ...q,
+            selectedOptionId: answer.selectedOptionId || null,
+            selectedOptionText: answer.selectedOptionText || null,
+            isSelectedOptionCorrect: answer.isSelectedOptionCorrect ?? null,
+          };
+        });
+
+        return {
+          ...result,
+          student: undefined, 
+          quiz: {
+            ...result.quiz,
+            questions: updatedQuestions,
+          },
+        };
+      });
+
+      res.status(200).json(
+        new ApiResponse(200, {
+          rank: studentData.Rank,
+          points: studentData.points,
+          results: enhancedResults,
+        }, "Results retrieved successfully")
+      );
     } catch (error) {
       next(error);
     }
   }
 );
+
+
+
 
 export const getResultByIdController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
