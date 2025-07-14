@@ -4,6 +4,7 @@ import { isAdmin } from "../middlwares/isAdmin.middleware";
 import { isTeacher } from "../middlwares/isTeacher.middleware";
 import {
   addQuestionsToQuiz,
+  assignQuizController,
   bulkGradeANswerController,
   createQuizController,
   createQuizWithQuestions,
@@ -59,6 +60,7 @@ router.route("/own-quiz").get(getAllOwnQuizFor_TeacherController);
 router.route("/teacher/report/:quizId").get(getQuizReportForTeacher);
 router.route("/teacher/:id").get(getQuizByIdFor_Teacher_Controller);
 router.route("/update/:quizId").put(updateQuizWithQuestions);
+router.route("/assign").post(assignQuizController)
 
 router.use(isAdmin);
 

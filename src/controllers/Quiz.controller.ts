@@ -2584,3 +2584,48 @@ export const updateQuizWithQuestions = asyncHandler(
     }
   }
 );
+
+
+export const assignQuizController=asyncHandler(async(req:Request,res:Response,next:NextFunction)=>{
+  
+  try {
+    const { quizId, studentIds, teacherId } = req.body;
+
+    if (!quizId || !Array.isArray(studentIds) || !teacherId) {
+      throw new CustomError("Missing required fields",400)
+    }
+
+    const existingAssignments = await prisma.quizAssignment.findMany({
+      where: {
+        quizId,
+        studentId: { in: studentIds },
+      },
+      select: { studentId: true },
+    });
+
+    const alreadyAssignedIds = new Set(existingAssignments.map(e => e.studentId));
+
+    const newAssignments = studentIds
+      .filter(id => !alreadyAssignedIds.has(id))
+      .map(studentId => ({
+        quizId,
+        studentId,
+        assignedBy: teacherId,
+      }));
+
+    await prisma.quizAssignment.createMany({
+      data: newAssignments,
+      skipDuplicates: true,
+    });
+
+    const skippedCount=studentIds.length - newAssignments.length;
+    const assignedCount= newAssignments.length;
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, {assignedCount,
+          skippedCount}, "Quiz assigned successfully"));
+  } catch (error) {
+    next(error)
+  }
+})

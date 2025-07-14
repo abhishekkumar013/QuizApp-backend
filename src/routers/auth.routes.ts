@@ -24,6 +24,7 @@ import {
 import express, { Router } from "express";
 import { isAuthenticated } from "../middlwares/Auth.middleware";
 import { isAdmin } from "../middlwares/isAdmin.middleware";
+import { isTeacher } from "../middlwares/isTeacher.middleware";
 
 const router: Router = express.Router();
 
@@ -49,6 +50,10 @@ router.route("/search/teacher").get(getExactSearchForTeacherController);
 // Student routes
 router.route("/add-parent").put(updateStudentParentController);
 
+router.use(isTeacher)
+
+router.route("/students/search/:search").get(searchStudentController);
+
 router.use(isAdmin);
 // Parent routes
 router.route("/parents").get(getAllParentsController);
@@ -62,6 +67,6 @@ router.route("/teachers/search/:search").get(searchTeacherController);
 
 router.route("/admin/users").get(GetUserController);
 router.route("/students").get(getAllStudentController);
-router.route("/students/search/:search").get(searchStudentController);
+
 
 export default router;

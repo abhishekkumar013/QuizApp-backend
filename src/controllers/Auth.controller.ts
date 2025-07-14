@@ -974,55 +974,35 @@ export const getParentChildrenController = asyncHandler(
   }
 );
 
+// search by teacher to assign in quiz
 export const searchStudentController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       // TODO: fix here
-      const searchTerm = req.params.search || (req.query.name as string);
-
+      const searchTerm = req.params.search;
       if (!searchTerm) {
         throw new CustomError("Search term is required", 400);
       }
 
-      const students = await prisma.studentProfile.findMany({
-        where: {
-          user: {
-            OR: [
-              {
-                name: {
-                  contains: searchTerm,
-                  mode: "insensitive",
-                },
-              },
-              {
-                email: {
-                  contains: searchTerm,
-                  mode: "insensitive",
-                },
-              },
-            ],
-          },
+      const students=await prisma.studentProfile.findMany({
+        where:{
+          user:{
+            email:{
+              contains: searchTerm,
+              mode:"insensitive"
+            }
+          }
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              role: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          },
-          parent: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
+        select:{
+          id:true,
+          user:{
+            select:{
+              email:true,
+              name:true,
+            }
+          }
+        }
+      })
 
       if (!students || students.length === 0) {
         throw new CustomError("No students found", 404);
