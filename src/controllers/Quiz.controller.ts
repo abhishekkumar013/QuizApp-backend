@@ -747,17 +747,17 @@ export const getAllOwnQuizFor_TeacherController = asyncHandler(
       const [publicQuizzes, privateQuizzes, protectedQuizzes] =
         await Promise.all([
           prisma.quiz.findMany({
-            where: { accessType: "PUBLIC", createdById: userId },
+            where: { accessType: "PUBLIC", status:"PUBLISHED" , createdById: userId },
             orderBy: { createdAt: "desc" },
             select: quizSelectFields,
           }),
           prisma.quiz.findMany({
-            where: { accessType: "PRIVATE", createdById: userId },
+            where: { accessType: "PRIVATE", status:"PUBLISHED" , createdById: userId },
             orderBy: { createdAt: "desc" },
             select: quizSelectFields,
           }),
           prisma.quiz.findMany({
-            where: { accessType: "PROTECTED", createdById: userId },
+            where: { status: "DRAFT", createdById: userId },
             orderBy: { createdAt: "desc" },
             select: quizSelectFields,
           }),
@@ -2164,6 +2164,7 @@ export const getQuizReportForTeacher = asyncHandler(
           isPassed: true,
           questionsCorrect: true,
           questionsIncorrect: true,
+          timeTaken:true,
           student: {
             select: {
               user: {
@@ -2190,6 +2191,7 @@ export const getQuizReportForTeacher = asyncHandler(
         name: r.student.user.name,
         email: r.student.user.email,
         percentage: r.percentage,
+        timeTaken: r.timeTaken,
         correctAnswers: r.questionsCorrect,
         wrongAnswers: r.questionsIncorrect,
         isPassed: r.isPassed,
