@@ -6,6 +6,7 @@ import { prisma } from "../index";
 import { ApiResponse } from "../Lib/apiResponse";
 import { json } from "stream/consumers";
 import { equal } from "assert";
+import { sendNotification } from "../utils/Notifaction";
 
 interface QuestionInput {
   text: string;
@@ -2622,6 +2623,44 @@ export const assignQuizController=asyncHandler(async(req:Request,res:Response,ne
 
     const skippedCount=studentIds.length - newAssignments.length;
     const assignedCount= newAssignments.length;
+
+    const assignmentsWithUser = await prisma.quizAssignment.findMany({
+      where:{
+        quizId:quizId,
+        studentId: { in: newAssignments.map(a => a.studentId) }
+      },
+      select:{
+        student:{
+          select:{
+            user:{
+              select:{
+                id:true,
+                fcmToken:true
+              }
+            }
+          }
+        },
+        quiz:{
+          select:{
+            title:true,
+          }
+        }
+      }
+    })
+
+    for (const assignment of assignmentsWithUser) {
+      const token = assignment.student?.user.fcmToken
+      if (token) {
+        await sendNotification(
+          token,
+          "📘 New Quiz Assigned!",
+          `You have a new quiz: "${assignment.quiz.title}"`
+        );
+      }
+    }
+
+
+    
 
     return res
         .status(200)

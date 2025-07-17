@@ -9,6 +9,7 @@ import {
   GetUserController,
   LinkParentStudentController,
   resetPasswordController,
+  saveFcmTokenController,
   searchParentController,
   searchStudentController,
   searchTeacherController,
@@ -46,6 +47,7 @@ router.route("/parents/:id/add-child").put(addChildToParentController);
 
 router.route("/search/student").get(getExactSearchForUserController);
 router.route("/search/teacher").get(getExactSearchForTeacherController);
+router.route("/user/save-token").put(saveFcmTokenController);
 
 // Student routes
 router.route("/add-parent").put(updateStudentParentController);

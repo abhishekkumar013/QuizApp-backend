@@ -1,12 +1,18 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import path from "path";
 import cookieParser from "cookie-parser";
 import { errorHandler } from "./Lib/error.handler";
 import { PrismaClient } from "@prisma/client";
 import { Server } from "socket.io";
 import http from "http";
+import path from "path";
+import { readFileSync } from "fs";
+import admin from "firebase-admin";
+
+const serviceAccountPath = path.resolve(__dirname, "../firebase-service-account.json");
+const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, "utf-8"));
+
 
 dotenv.config({
   path: "./.env",
@@ -33,6 +39,13 @@ const io = new Server(server, {
 });
 
 export const prisma = new PrismaClient();
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
+
 
 import AuthRoutes from "./routers/auth.routes";
 import QuizRoutes from "./routers/quiz.routes";

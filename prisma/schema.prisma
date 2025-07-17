@@ -52,6 +52,7 @@ model User {
   email    String   
   password String
   role     Role
+  fcmToken String?
 
   studentProfile StudentProfile? @relation("StudentUser")
   parentProfile  ParentProfile?  @relation("ParentUser")

@@ -1280,3 +1280,28 @@ export const getExactSearchForTeacherController = asyncHandler(
     }
   }
 );
+
+
+
+export const saveFcmTokenController=asyncHandler(async(req,res,next)=>{
+  try {
+    const {token}=req.body
+    if(!token){
+      throw new CustomError("FCM Token required",404)
+    }
+    const id=req?.user?.id
+
+    await prisma.user.update({
+      where:{
+        id: id
+      },
+      data:{
+        fcmToken: token
+      }
+    })
+
+    return res.status(201).json(new ApiResponse(200,{},"success"))
+  } catch (error) {
+    next(error)
+  }
+})
