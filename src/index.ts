@@ -7,11 +7,21 @@ import { PrismaClient } from "@prisma/client";
 import { Server } from "socket.io";
 import http from "http";
 import path from "path";
-import { readFileSync } from "fs";
+import fs,{ readFileSync } from "fs";
 import admin from "firebase-admin";
 
-const serviceAccountPath = path.resolve(__dirname, "../firebase-service-account.json");
-const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, "utf-8"));
+// const serviceAccountPath = path.resolve(__dirname, "../firebase-service-account.json");
+// const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, "utf-8"));
+
+const firebaseJsonPath = "./firebase-service.json";
+const base64 = process.env.FIREBASE_SERVICE_JSON;
+fs.writeFileSync(firebaseJsonPath, Buffer.from(base64, 'base64'));
+
+// Then initialize firebase using this file
+
+admin.initializeApp({
+  credential: admin.credential.cert(firebaseJsonPath),
+});
 
 
 dotenv.config({
@@ -40,11 +50,11 @@ const io = new Server(server, {
 
 export const prisma = new PrismaClient();
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
+// if (!admin.apps.length) {
+//   admin.initializeApp({
+//     credential: admin.credential.cert(serviceAccount),
+//   });
+// }
 
 
 import AuthRoutes from "./routers/auth.routes";
