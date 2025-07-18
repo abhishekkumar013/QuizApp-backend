@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun run ./src/index.ts",
     "build": "bun run build",
-    "start": "bun run start"
+    "start": "bun run ./src/index.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
