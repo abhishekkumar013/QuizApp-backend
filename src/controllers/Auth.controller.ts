@@ -235,7 +235,6 @@ export const SignInController = asyncHandler(
               email: isUser.email,
               name: isUser.name,
               role: isUser.role,
-              token: token,
               roleId: roleId,
               ...(role === "STUDENT" && { parentDetail }),
             },
