@@ -25,7 +25,7 @@ dotenv.config({
 const app = express();
 app.use(
   cors({
-    origin: ["http://localhost:3000", "https://quizmaster-56qn.onrender.com"],
+    origin: ["http://localhost:3000", "https://quizmaster-five.vercel.app"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   })
@@ -56,13 +56,11 @@ app.use("/api/v1/result", ResultRoutes);
 app.use("/api/v1/category", CategoryRoutes);
 app.use("/api/v1/room", RoomRoutes);
 
-
 const activeQuizSessions = new Map();
 
 const socketToSession = new Map();
 
 const roomStats = new Map();
-
 
 io.on("connection", (socket) => {
   // console.log("User connected:", socket.id);
@@ -70,11 +68,11 @@ io.on("connection", (socket) => {
   socket.on("restore-session", async ({ sessionId, roomId }) => {
     try {
       // console.log("Restoring session:", sessionId, "for socket:", socket.id);
-      
+
       if (sessionId) {
         const session = await prisma.quizSession.findUnique({
           where: { id: sessionId },
-          include: { room: true }
+          include: { room: true },
         });
 
         if (session && session.status === "IN_PROGRESS") {
@@ -86,7 +84,7 @@ io.on("connection", (socket) => {
             userId: session.studentId,
             studentProfileId: session.studentProfileId,
             startedAt: session.startedAt,
-            socketId: socket.id, 
+            socketId: socket.id,
           });
 
           socketToSession.set(socket.id, sessionId);
@@ -95,14 +93,16 @@ io.on("connection", (socket) => {
             socket.join(session.roomId);
           }
 
-          socket.emit("session-restored", { 
-            sessionId: session.id, 
+          socket.emit("session-restored", {
+            sessionId: session.id,
             roomId: session.roomId,
-            quizId: session.quizId 
+            quizId: session.quizId,
           });
           // console.log("Session restored successfully:", sessionId);
         } else {
-          socket.emit("error", { message: "Session not found or already completed" });
+          socket.emit("error", {
+            message: "Session not found or already completed",
+          });
         }
       }
     } catch (error) {
@@ -132,7 +132,6 @@ io.on("connection", (socket) => {
         socketId: socket.id,
       });
 
-
       socketToSession.set(socket.id, session.id);
 
       socket.emit("quiz-started", { sessionId: session.id });
@@ -145,10 +144,11 @@ io.on("connection", (socket) => {
 
   socket.on("save-answer", async ({ sessionId, questionId, optionId }) => {
     try {
-      
       const sessionInfo = activeQuizSessions.get(sessionId);
       if (!sessionInfo) {
-        socket.emit("error", { message: "Invalid session. Please refresh and try again." });
+        socket.emit("error", {
+          message: "Invalid session. Please refresh and try again.",
+        });
         return;
       }
 
@@ -217,11 +217,13 @@ io.on("connection", (socket) => {
       const sessionInfo = activeQuizSessions.get(sessionId);
 
       if (!sessionInfo) {
-        socket.emit("error", { message: "No active quiz session found. Please refresh and try again." });
+        socket.emit("error", {
+          message:
+            "No active quiz session found. Please refresh and try again.",
+        });
         return;
       }
 
-    
       if (sessionInfo.socketId !== socket.id) {
         sessionInfo.socketId = socket.id;
         socketToSession.set(socket.id, sessionId);
@@ -232,7 +234,6 @@ io.on("connection", (socket) => {
         (currentTime - sessionInfo.startedAt) / 1000
       );
 
-  
       const updatedSession = await prisma.quizSession.update({
         where: { id: sessionId },
         data: {
@@ -255,7 +256,6 @@ io.on("connection", (socket) => {
         },
       });
 
-      
       const totalQuestions = updatedSession.quiz.questions.length;
       const questionsAttempted = updatedSession.answers.length;
       const questionsCorrect = updatedSession.answers.filter(
@@ -315,14 +315,11 @@ io.on("connection", (socket) => {
         },
       });
 
-    
       activeQuizSessions.delete(sessionId);
       socketToSession.delete(socket.id);
 
-    
       const evaluation = [];
 
-    
       const allQuestions = await prisma.question.findMany({
         where: { quizId: sessionInfo.quizId },
         include: {
@@ -331,7 +328,6 @@ io.on("connection", (socket) => {
         orderBy: { order: "asc" },
       });
 
-      
       for (const question of allQuestions) {
         const userAnswer = updatedSession.answers.find(
           (answer) => answer.question.id === question.id
@@ -398,33 +394,30 @@ io.on("connection", (socket) => {
         where: {
           roomCode: roomCode,
           endTime: {
-            gt: new Date() 
-          }
-        }
+            gt: new Date(),
+          },
+        },
       });
-  
+
       if (!room) {
         socket.emit("error", { message: "Invalid room code or Room Expire" });
         return;
       }
-  
+
       socket.join(room.id);
-  
-    
+
       if (!roomStats.has(room.id)) {
         roomStats.set(room.id, {
           studentsJoined: new Set(),
           highestScore: 0,
-          totalSubmissions: 0
+          totalSubmissions: 0,
         });
       }
-  
-      
+
       const stats = roomStats.get(room.id);
       const wasNewStudent = !stats.studentsJoined.has(studentProfileId);
       stats.studentsJoined.add(studentProfileId);
-  
-     
+
       const session = await prisma.quizSession.create({
         data: {
           quizId: room.quizId,
@@ -435,7 +428,7 @@ io.on("connection", (socket) => {
           startedAt: new Date(),
         },
       });
-  
+
       activeQuizSessions.set(session.id, {
         sessionId: session.id,
         roomId: room.id,
@@ -445,28 +438,24 @@ io.on("connection", (socket) => {
         startedAt: session.startedAt,
         socketId: socket.id,
       });
-  
+
       socketToSession.set(socket.id, session.id);
-  
-      
-      
-  
+
       // Emit updated room stats to all clients in the room
       const roomStatsData = {
         studentsJoined: stats.studentsJoined.size,
         highestScore: stats.highestScore,
-        totalSubmissions: stats.totalSubmissions
+        totalSubmissions: stats.totalSubmissions,
       };
       // console.log(stats.studentsJoined.size)
-      
+
       io.to(room.id).emit("room-stats-updated", roomStatsData);
-     
-  
-      socket.emit("quiz-started", { 
-        sessionId: session.id, 
-        roomId: room.id, 
-        quizId: room.quizId ,
-        roomStatsData: roomStatsData
+
+      socket.emit("quiz-started", {
+        sessionId: session.id,
+        roomId: room.id,
+        quizId: room.quizId,
+        roomStatsData: roomStatsData,
       });
     } catch (error) {
       console.error("Join Room Error:", error);
@@ -477,22 +466,24 @@ io.on("connection", (socket) => {
   socket.on("submit-quiz-room", async ({ sessionId }) => {
     try {
       const sessionInfo = activeQuizSessions.get(sessionId);
-      
+
       if (!sessionInfo) {
-        socket.emit("error", { message: "No active session found. Please refresh and try again." });
+        socket.emit("error", {
+          message: "No active session found. Please refresh and try again.",
+        });
         return;
       }
-  
+
       if (sessionInfo.socketId !== socket.id) {
         sessionInfo.socketId = socket.id;
         socketToSession.set(socket.id, sessionId);
       }
-  
+
       const currentTime = new Date();
       const timeSpent = Math.floor(
         (currentTime - sessionInfo.startedAt) / 1000
       );
-  
+
       const updatedSession = await prisma.quizSession.update({
         where: { id: sessionId },
         data: {
@@ -505,7 +496,7 @@ io.on("connection", (socket) => {
           quiz: { include: { questions: true } },
         },
       });
-  
+
       const totalQuestions = updatedSession.quiz.questions.length;
       const questionsAttempted = updatedSession.answers.length;
       const questionsCorrect = updatedSession.answers.filter(
@@ -525,7 +516,7 @@ io.on("connection", (socket) => {
       );
       const percentage = parseFloat(((score / totalMarks) * 100).toFixed(2));
       const isPassed = percentage >= updatedSession.quiz.passingMarks;
-  
+
       const attemptNumber =
         (await prisma.result.count({
           where: {
@@ -533,7 +524,7 @@ io.on("connection", (socket) => {
             studentId: sessionInfo.studentProfileId,
           },
         })) + 1;
-  
+
       const result = await prisma.result.create({
         data: {
           studentId: sessionInfo.studentProfileId,
@@ -551,12 +542,12 @@ io.on("connection", (socket) => {
           attemptNumber,
         },
       });
-  
+
       await prisma.studentProfile.update({
         where: { id: sessionInfo.studentProfileId },
         data: { points: { increment: questionsCorrect } },
       });
-  
+
       // Update room stats with the new submission
       if (roomStats.has(sessionInfo.roomId)) {
         const stats = roomStats.get(sessionInfo.roomId);
@@ -564,25 +555,25 @@ io.on("connection", (socket) => {
         if (score > stats.highestScore) {
           stats.highestScore = score;
         }
-  
+
         // Emit updated room stats to all clients in the room
         io.to(sessionInfo.roomId).emit("room-stats-updated", {
           studentsJoined: stats.studentsJoined.size,
           highestScore: stats.highestScore,
-          totalSubmissions: stats.totalSubmissions
+          totalSubmissions: stats.totalSubmissions,
         });
       }
-  
+
       // Get all submissions for room report
       const submissions = await prisma.quizSession.findMany({
         where: { roomId: sessionInfo.roomId, status: "SUBMITTED" },
         include: { result: true },
       });
-  
+
       const totalSubmissions = submissions.length;
       const scores = submissions.map((s) => s.result?.score ?? 0);
       const times = submissions.map((s) => s.timeSpent);
-  
+
       if (sessionInfo.roomId) {
         io.to(sessionInfo.roomId).emit("room-report-updated", {
           totalSubmissions,
@@ -593,12 +584,12 @@ io.on("connection", (socket) => {
           lowestTime: Math.min(...times),
         });
       }
-  
+
       activeQuizSessions.delete(sessionId);
       socketToSession.delete(socket.id);
-  
+
       const evaluation = [];
-  
+
       const allQuestions = await prisma.question.findMany({
         where: { quizId: sessionInfo.quizId },
         include: {
@@ -606,14 +597,14 @@ io.on("connection", (socket) => {
         },
         orderBy: { order: "asc" },
       });
-  
+
       for (const question of allQuestions) {
         const userAnswer = updatedSession.answers.find(
           (answer) => answer.question.id === question.id
         );
-  
+
         const correctOption = question.options.find((opt) => opt.isCorrect);
-  
+
         if (userAnswer) {
           evaluation.push({
             questionId: question.id,
@@ -642,7 +633,7 @@ io.on("connection", (socket) => {
           });
         }
       }
-  
+
       socket.emit("quiz-submitted", {
         success: true,
         result: {
@@ -678,13 +669,13 @@ io.on("connection", (socket) => {
     roomStats.forEach((users, roomId) => {
       if (users.has(socket.id)) {
         users.delete(socket.id);
-  
+
         io.to(roomId).emit("roomStats", {
           roomId,
           users: Array.from(users),
           count: users.size,
         });
-  
+
         // Optional cleanup
         if (users.size === 0) {
           roomStats.delete(roomId);
