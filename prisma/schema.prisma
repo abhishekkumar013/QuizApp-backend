@@ -108,6 +108,7 @@ model TeacherProfile {
 
 
   assignedQuizzes QuizAssignment[]
+  room            Room[]
 }
 
 model  AdminProfile{
@@ -160,6 +161,7 @@ model Quiz {
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  room        Room[]
 }
 
 
@@ -210,6 +212,8 @@ model QuizSession {
   student     User         @relation(fields: [studentId], references: [id])
   studentId   String
   studentProfile StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  roomId      String?
+  room        Room?         @relation(fields: [roomId], references: [id], onDelete: Cascade)
   studentProfileId String
   
   status      ResultStatus @default(IN_PROGRESS)
@@ -236,6 +240,24 @@ model Answer{
   answeredAt  DateTime    @default(now())
   
   @@unique([sessionId, questionId])
+}
+
+model Room {
+  id        String   @id @default(uuid())
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  teacherId String
+  createdBy TeacherProfile  @relation(fields: [teacherId],references: [id],onDelete: Cascade)
+  roomCode  String   @unique
+  title     String?
+  startTime DateTime
+  endTime   DateTime
+  showReport Boolean @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants QuizSession[] 
 }
 
 

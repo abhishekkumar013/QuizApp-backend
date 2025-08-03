@@ -17,6 +17,7 @@ import {
   getQuizByCategoryController,
   getQuizByIdController,
   getQuizByIdFor_Teacher_Controller,
+  getQuizByRoomIdController,
   getQuizReportController,
   getQuizReportForTeacher,
   getStudentsWhoAttemptedQuizController,
@@ -36,6 +37,7 @@ router.use(isAuthenticated);
 
 router.route("/all-quiz").get(getAllQuizController);
 router.route("/id/:id").get(getQuizByIdController);
+router.route("/room/:roomId").get(getQuizByRoomIdController)
 
 router.route("/category/:categoryId").get(getQuizByCategoryController);
 

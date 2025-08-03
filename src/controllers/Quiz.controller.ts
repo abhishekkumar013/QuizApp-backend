@@ -855,6 +855,82 @@ export const getQuizByIdController = asyncHandler(
   }
 );
 
+export const getQuizByRoomIdController = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { roomId } = req.params;
+      if (!roomId) {
+        throw new CustomError("Room ID is required", 400);
+      }
+
+      const isroom=await prisma.room.findUnique({
+        where:{
+          id: roomId,
+          endTime:{
+            gt: new Date(),
+          }
+        }
+      });
+      if(!isroom){
+        throw new CustomError("Wrong room code or room expire",400)
+      }
+
+      const quiz = await prisma.quiz.findUnique({
+        where: { id: isroom.quizId },
+
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          instructions: true,
+          totalMarks: true,
+          accessType: true,
+          status: true,
+          difficulty: true,
+          passingMarks: true,
+          maxAttempts: true,
+          durationInMinutes: true,
+          startTime: true,
+          endTime: true,
+          createdBy: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          questions: {
+            include: {
+              options: true,
+            },
+          },
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (!quiz) {
+        throw new CustomError("Quiz not found for room", 404);
+      }
+
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, quiz, "Quiz fetched successfully"));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export const getQuizByCategoryController = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -2131,9 +2207,14 @@ export const getAllPublicQUizzesController = asyncHandler(
           },
           createdBy: {
             select: {
-              id: true,
-              name: true,
-              email: true,
+              id:true,
+              user:{
+                select:{
+                  name:true,
+                  email:true
+                }
+              }
+             
             },
           },
         },
