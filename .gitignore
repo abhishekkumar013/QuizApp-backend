@@ -3,6 +3,7 @@ node_modules
 
 
 firebase-service-account.json
+firebase-service.json
 
 
 # output
@@ -39,7 +40,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
-.firebase-service-account.json
-.firebase-service.json
 firebase-service.json
 firebase-service-account.json
