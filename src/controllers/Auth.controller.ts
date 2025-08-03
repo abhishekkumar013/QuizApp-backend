@@ -223,8 +223,12 @@ export const SignInController = asyncHandler(
         .cookie("token", token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
           maxAge: 7 * 24 * 60 * 60 * 1000,
+          path: "/",
+          ...(process.env.NODE_ENV === "development" && {
+            domain: "localhost",
+          }),
         })
         .status(200)
         .json(
@@ -492,13 +496,12 @@ export const updateUserController = asyncHandler(
       // console.log(req.body)
 
       const existingUser = await prisma.user.findUnique({
-        where: { id:id },
-        select:{
-          role:true
-        }
+        where: { id: id },
+        select: {
+          role: true,
+        },
       });
       // console.log(existingUser)
-      
 
       if (!existingUser) {
         throw new CustomError("Invalid User ID || User not found", 404);
@@ -516,11 +519,10 @@ export const updateUserController = asyncHandler(
         },
       });
 
-      let pEMail=null;
-      let tphone=null;
-      let pPhone=null;
-      let texpYear=0;
-
+      let pEMail = null;
+      let tphone = null;
+      let pPhone = null;
+      let texpYear = 0;
 
       // Handle role-based profile updates
       if (originalRole === "STUDENT") {
@@ -529,17 +531,16 @@ export const updateUserController = asyncHandler(
           // console.log(parentEmail)
           const parent = await prisma.user.findFirst({
             where: {
-             email:parentEmail
+              email: parentEmail,
             },
-            select:{
-              parentProfile:{
-                select:{
-                  id:true
+            select: {
+              parentProfile: {
+                select: {
+                  id: true,
                 },
-              
-            }
-          }
-        });
+              },
+            },
+          });
           // console.log("P",parent)
           parentId = parent?.parentProfile?.id;
           await prisma.studentProfile.update({
@@ -548,7 +549,7 @@ export const updateUserController = asyncHandler(
               parentId: parentId,
             },
           });
-          pEMail=parentEmail
+          pEMail = parentEmail;
         }
       }
 
@@ -560,8 +561,8 @@ export const updateUserController = asyncHandler(
             experienceYears: experienceYears || 0,
           },
         });
-        texpYear=experienceYears
-        tphone=phone
+        texpYear = experienceYears;
+        tphone = phone;
       }
 
       if (originalRole === "PARENT") {
@@ -571,7 +572,7 @@ export const updateUserController = asyncHandler(
             phone: phone || null,
           },
         });
-        pPhone=phone
+        pPhone = phone;
       }
 
       const userResponse: any = {
@@ -580,14 +581,14 @@ export const updateUserController = asyncHandler(
         email: updatedUser.email,
         role: originalRole,
       };
-      
-      if(originalRole==="STUDENT"){
-        userResponse.parentEmail=pEMail
-      }else if(originalRole==="TEACHER"){
-        userResponse.phoe=tphone
-        userResponse.experienceYears=texpYear
-      }else{
-        userResponse.phone=pPhone
+
+      if (originalRole === "STUDENT") {
+        userResponse.parentEmail = pEMail;
+      } else if (originalRole === "TEACHER") {
+        userResponse.phoe = tphone;
+        userResponse.experienceYears = texpYear;
+      } else {
+        userResponse.phone = pPhone;
       }
 
       return res
@@ -931,42 +932,51 @@ export const getParentChildrenController = asyncHandler(
 
       const childrens = await prisma.studentProfile.findMany({
         where: {
-          parentId: parentId
+          parentId: parentId,
         },
-        include:{
-          user:{
-            select:{
-              name:true,
-              email:true
-            }
+        include: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
           },
-          results:{
-            select:{
-              score:true,
-              totalMarks:true,
-              percentage:true,
-            }
-          }
-        }
+          results: {
+            select: {
+              score: true,
+              totalMarks: true,
+              percentage: true,
+            },
+          },
+        },
       });
       const enrichedChildren = childrens.map((child) => {
         const quizzesTaken = child.results.length;
-        const totalPercentage = child.results.reduce((sum, r) => sum + r.percentage, 0);
-        const averageScore = quizzesTaken > 0 ? totalPercentage / quizzesTaken : 0;
+        const totalPercentage = child.results.reduce(
+          (sum, r) => sum + r.percentage,
+          0
+        );
+        const averageScore =
+          quizzesTaken > 0 ? totalPercentage / quizzesTaken : 0;
 
         return {
           ...child,
           quizzesTaken,
-          averageScore: parseFloat(averageScore.toFixed(2)), 
+          averageScore: parseFloat(averageScore.toFixed(2)),
         };
       });
-      
 
       // console.log(childrens)
 
       res
         .status(200)
-        .json(new ApiResponse(200, enrichedChildren, "Children fetched successfully"));
+        .json(
+          new ApiResponse(
+            200,
+            enrichedChildren,
+            "Children fetched successfully"
+          )
+        );
     } catch (error) {
       next(error);
     }
@@ -983,25 +993,25 @@ export const searchStudentController = asyncHandler(
         throw new CustomError("Search term is required", 400);
       }
 
-      const students=await prisma.studentProfile.findMany({
-        where:{
-          user:{
-            email:{
+      const students = await prisma.studentProfile.findMany({
+        where: {
+          user: {
+            email: {
               contains: searchTerm,
-              mode:"insensitive"
-            }
-          }
+              mode: "insensitive",
+            },
+          },
         },
-        select:{
-          id:true,
-          user:{
-            select:{
-              email:true,
-              name:true,
-            }
-          }
-        }
-      })
+        select: {
+          id: true,
+          user: {
+            select: {
+              email: true,
+              name: true,
+            },
+          },
+        },
+      });
 
       if (!students || students.length === 0) {
         throw new CustomError("No students found", 404);
@@ -1280,27 +1290,25 @@ export const getExactSearchForTeacherController = asyncHandler(
   }
 );
 
-
-
-export const saveFcmTokenController=asyncHandler(async(req,res,next)=>{
+export const saveFcmTokenController = asyncHandler(async (req, res, next) => {
   try {
-    const {token}=req.body
-    if(!token){
-      throw new CustomError("FCM Token required",404)
+    const { token } = req.body;
+    if (!token) {
+      throw new CustomError("FCM Token required", 404);
     }
-    const id=req?.user?.id
+    const id = req?.user?.id;
 
     await prisma.user.update({
-      where:{
-        id: id
+      where: {
+        id: id,
       },
-      data:{
-        fcmToken: token
-      }
-    })
+      data: {
+        fcmToken: token,
+      },
+    });
 
-    return res.status(201).json(new ApiResponse(200,{},"success"))
+    return res.status(201).json(new ApiResponse(200, {}, "success"));
   } catch (error) {
-    next(error)
+    next(error);
   }
-})
+});
